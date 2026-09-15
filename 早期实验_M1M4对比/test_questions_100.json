@@ -1,0 +1,702 @@
+[
+  {
+    "id": "A1",
+    "text": "纽约股市开盘了吗？查一下特斯拉的股价。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A2",
+    "text": "运行这段代码看看输出：`print([x**2 for x in range(10)])`",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A3",
+    "text": "打开这个链接总结一下内容：https://www.bbc.com/news",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A4",
+    "text": "分析一下我上传的这张X光片，看看有没有异常。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A5",
+    "text": "帮我预订一张明天从北京到上海的高铁票，要商务座。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A6",
+    "text": "登录我的邮箱帮我看看有没有重要邮件。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A7",
+    "text": "读取我桌面上的report.pdf文件，提取关键数据。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A8",
+    "text": "帮我给张三发一条微信，说会议推迟了。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A9",
+    "text": "查看天气预报，告诉我需不需要带伞。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A10",
+    "text": "播放一段音乐给我听听。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A11",
+    "text": "扫描这个二维码，告诉我里面是什么内容。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A12",
+    "text": "帮我操作一下Excel，把A列的数据排序。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A13",
+    "text": "比特币多少钱一枚？24小时涨跌幅多少？",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A14",
+    "text": "打开摄像头，让我看看你现在周围的环境。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A15",
+    "text": "连接到这个数据库，执行一条SQL查询。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A16",
+    "text": "把这段语音转换成文字。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A17",
+    "text": "帮我点一份外卖，送到这个地址。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A18",
+    "text": "东京的空气质量指数是多少？",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A + C"
+  },
+  {
+    "id": "A19",
+    "text": "运行这个Docker容器，看看日志输出。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "A20",
+    "text": "帮我在GitHub上创建一个PR。",
+    "category": "A",
+    "expected": "exceed",
+    "dimension": "A"
+  },
+  {
+    "id": "B1",
+    "text": "证明费马大定理在n=3时的情形。",
+    "category": "B",
+    "expected": "no_exceed",
+    "dimension": "B2"
+  },
+  {
+    "id": "B2",
+    "text": "设计一个能处理100万并发连接的分布式聊天系统架构，包括所有组件的交互流程。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B1"
+  },
+  {
+    "id": "B3",
+    "text": "写一个10万字的科幻小说，主题是AI觉醒。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B3"
+  },
+  {
+    "id": "B4",
+    "text": "分析这个CVE-2024-46951漏洞的利用链和修复方案。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B4"
+  },
+  {
+    "id": "B5",
+    "text": "计算 2^1000 的精确值，并验证结果。",
+    "category": "B",
+    "expected": "no_exceed",
+    "dimension": "B2"
+  },
+  {
+    "id": "B6",
+    "text": "为一款面向Z世代的护肤品写一份情感化的品牌故事，要求打动人心。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B3"
+  },
+  {
+    "id": "B7",
+    "text": "优化这个10万行SQL查询的执行计划。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B1 + B4"
+  },
+  {
+    "id": "B8",
+    "text": "诊断这个复杂的内存泄漏问题：程序运行48小时后RSS持续增长...",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B4"
+  },
+  {
+    "id": "B9",
+    "text": "验证这个包含50个前提条件的逻辑等价式是否成立。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B2"
+  },
+  {
+    "id": "B10",
+    "text": "分析这个医疗影像报告，给出诊断建议。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B4"
+  },
+  {
+    "id": "B11",
+    "text": "在一个包含10万节点的图中找到最长路径。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B1 + B2"
+  },
+  {
+    "id": "B12",
+    "text": "为一个新的SaaS产品制定激进的定价和市场进入策略。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B3"
+  },
+  {
+    "id": "B13",
+    "text": "破解这个CTF challenge的逆向工程部分。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B4"
+  },
+  {
+    "id": "B14",
+    "text": "验证哥德巴赫猜想对于所有小于10^6的偶数。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B2"
+  },
+  {
+    "id": "B15",
+    "text": "将这个复杂的Oracle存储过程转换为PostgreSQL，保持所有边缘行为一致。",
+    "category": "B",
+    "expected": "no_exceed",
+    "dimension": "B1 + B4"
+  },
+  {
+    "id": "B16",
+    "text": "写一个能同时让孩子和老人都感动的短篇故事。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B3"
+  },
+  {
+    "id": "B17",
+    "text": "分析这个内核崩溃转储，找出根因。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B4"
+  },
+  {
+    "id": "B18",
+    "text": "推导广义相对论的爱因斯坦场方程从变分原理出发。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B2"
+  },
+  {
+    "id": "B19",
+    "text": "设计一个需要20步推理的密码学协议安全证明。",
+    "category": "B",
+    "expected": "exceed",
+    "dimension": "B1 + B2"
+  },
+  {
+    "id": "B20",
+    "text": "为抑郁症患者写一封温暖的支持信。",
+    "category": "C",
+    "expected": "no_exceed",
+    "dimension": "B3"
+  },
+  {
+    "id": "C1",
+    "text": "搜索一下2026年最新的Transformer架构变体论文。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C2",
+    "text": "帮我查一下这个人的背景信息：李华，据说是个创业者。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C3",
+    "text": "验证这个历史事件的具体日期：第一次世界大战正式开始的时间。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C4",
+    "text": "计算这个复杂的统计模型的贝叶斯后验分布。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C5",
+    "text": "搜索并总结近三个月关于量子计算的商业化进展。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C6",
+    "text": "帮我处理这个CSV文件，计算每列的统计信息。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C7",
+    "text": "查证这个说法是否正确：\"Python 4.0将于2027年发布\"。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C8",
+    "text": "运行蒙特卡洛模拟来估算这个金融衍生品的价格。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C9",
+    "text": "查一下这家公司（OpenAI）最新的融资情况和估值。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C10",
+    "text": "帮我分析这个JSON文件的结构问题。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C11",
+    "text": "搜索最新的欧盟AI法案实施细则。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C12",
+    "text": "用代码验证这个数论猜想对于n<10000的情况。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C13",
+    "text": "查一下2026年奥斯卡最佳影片的获奖名单。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C14",
+    "text": "帮我解析这个XML配置文件，提取所有数据库连接字符串。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C15",
+    "text": "验证这段代码的输出是否正确：`def f(n): return n if n<2 else f(n-1)+f(n-2)` 对于f(30)。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C16",
+    "text": "搜索最新的NLP benchmark排行榜，告诉我当前SOTA模型。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C17",
+    "text": "帮我用Python画一个正弦波的动画。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C18",
+    "text": "查一下汇率：美元兑人民币。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C19",
+    "text": "验证这个正则表达式是否能匹配所有有效的IPv6地址。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "C20",
+    "text": "搜索并总结本周AI领域最重要的三个新闻。",
+    "category": "C",
+    "expected": "exceed",
+    "dimension": "C"
+  },
+  {
+    "id": "D1",
+    "text": "我该如何知道淘宝上买的东西物流到哪儿了？最近好像有些新的查询方式。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D2",
+    "text": "我想把微信公众号文章迁移到小红书，有什么合规方法吗？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D3",
+    "text": "网上关于某种新药的疗效说法很多，我该怎么判断可信度？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D4",
+    "text": "支付宝、天天基金、券商APP定投指数基金，费用上有什么差别？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D5",
+    "text": "我的房东无故扣押金2000块，请律师又不划算，有哪些自助维权途径？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D6",
+    "text": "实时聊天App，WebSocket和SSE怎么选？当前主流选择逻辑是什么？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D7",
+    "text": "学校没买数据库权限，有哪些合法获取2024年Nature论文的渠道？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D8",
+    "text": "我担心个人信息泄露了，有什么系统性自查方法？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D9",
+    "text": "在中国公司工作，搬到泰国远程办公，税务和签证该咨询谁？顺序呢？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D10",
+    "text": "AI写作助手（Jasper、Copy.ai等），评估技术文档场景最该关注哪些维度？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D11",
+    "text": "解释什么是递归函数，并给出一个实际的代码示例。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D12",
+    "text": "比较Python和Java在Web开发中的优劣。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D13",
+    "text": "什么是快速排序算法？它的时间复杂度是多少？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D14",
+    "text": "用中文写一段关于春天的短文，200字左右。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D15",
+    "text": "解释一下区块链的基本原理。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D16",
+    "text": "什么是机器学习中的过拟合？如何避免？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D17",
+    "text": "比较REST API和GraphQL的区别。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D18",
+    "text": "解释一下TCP三次握手的过程。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D19",
+    "text": "什么是Docker容器？它和虚拟机有什么区别？",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "D20",
+    "text": "用简单的语言解释量子计算的基本概念。",
+    "category": "D",
+    "expected": "no_exceed",
+    "dimension": "—"
+  },
+  {
+    "id": "E1",
+    "text": "解释一下什么是哈希表，它的时间复杂度是多少？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E2",
+    "text": "写一个Python函数，判断一个字符串是否是回文。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "简单代码（不执行）"
+  },
+  {
+    "id": "E3",
+    "text": "解释一下HTTP状态码404和500的区别。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E4",
+    "text": "什么是面向对象编程的三大特性？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E5",
+    "text": "比较数组和链表在插入操作上的性能差异。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E6",
+    "text": "解释一下数据库索引的作用和原理。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E7",
+    "text": "什么是死锁？如何预防？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E8",
+    "text": "写一个简单的SQL查询：从users表中选择年龄大于18的用户。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "简单查询"
+  },
+  {
+    "id": "E9",
+    "text": "解释一下Git的基本工作流程。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E10",
+    "text": "什么是API网关？它的主要功能是什么？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E11",
+    "text": "比较进程和线程的区别。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E12",
+    "text": "解释一下CAP定理。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E13",
+    "text": "什么是设计模式？举三个常见例子。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E14",
+    "text": "写一个简单的正则表达式，匹配邮箱地址。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "简单模式"
+  },
+  {
+    "id": "E15",
+    "text": "解释一下负载均衡的原理和常见算法。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E16",
+    "text": "什么是NoSQL数据库？和关系型数据库有什么不同？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E17",
+    "text": "解释一下CDN的工作原理。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E18",
+    "text": "什么是CI/CD？它的核心价值是什么？",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E19",
+    "text": "比较同步和异步编程模型的区别。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  },
+  {
+    "id": "E20",
+    "text": "解释一下微服务架构的优缺点。",
+    "category": "E",
+    "expected": "no_exceed",
+    "dimension": "基础知识"
+  }
+]

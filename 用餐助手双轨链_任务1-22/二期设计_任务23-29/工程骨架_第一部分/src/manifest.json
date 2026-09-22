@@ -1,0 +1,26 @@
+{
+  "name": "食知",
+  "appid": "",
+  "description": "食物识别与营养分析小程序",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "uniStatistics": {
+    "enable": false
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "libVersion": "3.15.1",
+    "cloudfunctionRoot": "cloudfunctions/",
+    "permission": {},
+    "requiredPrivateInfos": []
+  },
+  "vueVersion": "3"
+}

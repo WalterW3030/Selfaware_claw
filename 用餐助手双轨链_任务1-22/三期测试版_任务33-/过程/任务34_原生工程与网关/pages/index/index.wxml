@@ -1,0 +1,20 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <!-- 视觉重点:拍照入口 -->
+  <view class="primary-action">
+    <button bindtap="handleCapture">拍照识别</button>
+  </view>
+
+  <!-- 三预设模板入口 -->
+  <view class="templates">
+    <button bindtap="goResult" data-mode="recognize">识图</button>
+    <button bindtap="goResult" data-mode="copy">文案</button>
+    <button bindtap="goResult" data-mode="nutrition">营养分析</button>
+  </view>
+
+  <!-- 自由提问入口,退居二线 -->
+  <view class="chat-entry">
+    <text bindtap="goResult" data-mode="chat">自由提问</text>
+  </view>
+</view>

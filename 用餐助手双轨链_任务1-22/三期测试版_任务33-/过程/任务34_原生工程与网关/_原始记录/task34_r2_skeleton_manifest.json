@@ -1,0 +1,72 @@
+[
+ {
+  "path": "任务33_工程骨架/AGENTS.md",
+  "bytes": 2524,
+  "sha256": "ef7db714c6c3fd9d4bc42364b356ee11ddd3d271120a6f2c6c3946d34396f6d1"
+ },
+ {
+  "path": "任务33_工程骨架/cloudfunctions/README.md",
+  "bytes": 179,
+  "sha256": "34ed5679a0cece55805b45a49140d56d9a20b987d17924d59633021fcfb5eda6"
+ },
+ {
+  "path": "任务33_工程骨架/src/App.vue",
+  "bytes": 677,
+  "sha256": "76320d39cfc89b7eac9beaa1d06ecbb5844b2a19a13d211739bbfe6e278f3850"
+ },
+ {
+  "path": "任务33_工程骨架/src/common/confirm.js",
+  "bytes": 1848,
+  "sha256": "1d888247d7e503a722e208c0728021f271359b14244ac8ff65a5059ef0625be4"
+ },
+ {
+  "path": "任务33_工程骨架/src/common/gateway.js",
+  "bytes": 1150,
+  "sha256": "368f6a5ff74ec520b9d8183f0a804e7c75a1a5ce056c0f80391ea52f13f4e2c3"
+ },
+ {
+  "path": "任务33_工程骨架/src/main.js",
+  "bytes": 145,
+  "sha256": "6b781680e90627242750637f0e87648f071e545b2e752076a39ff5da685dedcf"
+ },
+ {
+  "path": "任务33_工程骨架/src/manifest.json",
+  "bytes": 543,
+  "sha256": "ab97d24f3a0cf729cc577e41ede3263fe8131db326d1df57f9f99e5c44af6832"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages.json",
+  "bytes": 811,
+  "sha256": "efa39b80b1671ac1ecd872eeb2fe7244f1a7d5dd9c41f154b40c70f9882bfd53"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages/history/history.vue",
+  "bytes": 449,
+  "sha256": "3d2e3288b3cff01a4d4672d2fd53b4fa17edbef28c37911186a8a87136ebb5f9"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages/index/index.vue",
+  "bytes": 1382,
+  "sha256": "65fbd6225fa76391c4071aaa69b02ea90dc161578303a72244758b93d5066a8f"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages/order/order.vue",
+  "bytes": 1210,
+  "sha256": "7f8a0ea1b3243a2e9dce3f465c9dbbb5ebc5c83af596d97297bb5199906552e7"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages/profile/profile.vue",
+  "bytes": 865,
+  "sha256": "bb5a97b03a64b8b0b3fb0a1a81ccaf996e17cb5860fc961cb5a0760f1f9d5982"
+ },
+ {
+  "path": "任务33_工程骨架/src/pages/result/result.vue",
+  "bytes": 831,
+  "sha256": "4a8d301644c4aacd57b5ae7fe9ef625aa348362c925a300cb021bc4943435add"
+ },
+ {
+  "path": "任务33_工程骨架/导入与运行说明.md",
+  "bytes": 2343,
+  "sha256": "fff8110a98c4af61ac3093fe3b99ab31335e7c178432a6bb702bf06e241a7b32"
+ }
+]

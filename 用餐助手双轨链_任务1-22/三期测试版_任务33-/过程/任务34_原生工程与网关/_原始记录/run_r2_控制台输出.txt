@@ -1,0 +1,16 @@
+[BIND] script_sha=4ded729b75670794000d1c38829632a9826d342b5e0ace96e5ce216521485566 (脚本文件未改)
+[BIND] context_sha=76fa50db292c157e5d6931ad328699e99c28fe3a1b8fbeabadebd498475dbc5c bytes=37773 (四份+骨架14文件)
+[BIND] questions_sha=c0b3b40753a20944532192ec918a21fe637ae12cdb8a634ef14244b9d61d970a
+[BIND] env: MAX_TOKENS=16384 model=deepseek-v4-flash mode=multi_turn rounds=3 payload_thinking=enabled/low
+[ENV] 执行前环境声明：本轮5条缓冲已处理，无其他待处理消息；最新有效指令=任务34r2修订 2026-09-23T15:08:10+08:00（r1已停止登记并入库commit 57d1861，r2不销毁r1任何记录）
+[Cycle 1] outcome=direct handoff=False reply=这是纯代码结构转换任务，源文件已全部在上下文中提供，无需外部访问或执行，我直接按原生微信小程序规范转换。以下为原生化后的
+[Cycle 2] outcome=direct handoff=False reply=按定稿表与背景调研的调用姿势，aiGateway 的 extend.AI 通道完整实现如下（2.3 的 selfhost
+[Cycle 3] outcome=direct handoff=False reply=按 2.3 要求，在同一 index.js 内加 selfhost 备选通道（默认关闭、环境变量存在才启用、extend
+[ASSERT PASS] cycle1: len=11(exp=11) system_v44=True context_injected=True tail_verbatim=True
+[ASSERT PASS] cycle2: len=13(exp=13) system_v44=True context_injected=True tail_verbatim=True
+[ASSERT PASS] cycle3: len=15(exp=15) system_v44=True context_injected=True tail_verbatim=True
+[TIMING] wall_clock_total=55.195s start=1790147618.801 end=1790147673.996
+[CYCLE] id=1 outcome=direct handoff=False dur_ms=23092
+[CYCLE] id=2 outcome=direct handoff=False dur_ms=16493
+[CYCLE] id=3 outcome=direct handoff=False dur_ms=15608
+[STRUCT_ASSERT]ALL_PASS

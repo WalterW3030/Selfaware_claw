@@ -1,0 +1,10 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <view wx:if="{{records.length === 0}}" class="empty">
+    <text>暂无记录</text>
+  </view>
+  <view wx:else class="list">
+    <view wx:for="{{records}}" wx:key="id">{{item.dish}}</view>
+  </view>
+</view>

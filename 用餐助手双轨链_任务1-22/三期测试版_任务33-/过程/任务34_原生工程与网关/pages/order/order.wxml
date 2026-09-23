@@ -1,0 +1,14 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <!-- 顶部双模式选择器,默认快速 -->
+  <view class="mode-switch">
+    <button class="{{mode === 'fast' ? 'active' : ''}}" bindtap="setFast">快速</button>
+    <button class="{{mode === 'deep' ? 'active' : ''}}" bindtap="setDeep">深度</button>
+  </view>
+
+  <!-- 菜单拍照入口 -->
+  <view class="menu-capture">
+    <button bindtap="handleMenuCapture">拍菜单</button>
+  </view>
+</view>

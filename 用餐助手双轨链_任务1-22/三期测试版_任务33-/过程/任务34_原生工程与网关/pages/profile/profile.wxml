@@ -1,0 +1,16 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <view class="section body-data">
+    <text class="section-title">身体数据</text>
+    <input placeholder="身高 (cm)" />
+    <input placeholder="体重 (kg)" />
+    <input placeholder="过敏原" />
+    <input placeholder="饮食目标" />
+  </view>
+
+  <view class="section auth">
+    <text class="section-title">授权管理</text>
+    <button bindtap="goAuth">隐私与授权</button>
+  </view>
+</view>

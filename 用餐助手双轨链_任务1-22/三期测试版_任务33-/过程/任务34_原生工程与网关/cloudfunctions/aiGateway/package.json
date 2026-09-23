@@ -1,0 +1,9 @@
+{
+  "name": "aiGateway",
+  "version": "1.0.0",
+  "description": "食知 AI 网关云函数（六功能位统一出口，extend.AI 托管 + selfhost 备选）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~4.0.1"
+  }
+}

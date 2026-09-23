@@ -1,0 +1,142 @@
+[
+ {
+  "item": "30文件齐套（26原生+网关3+说明）",
+  "pass": true,
+  "detail": "共31件"
+ },
+ {
+  "item": "libVersion=3.15.1",
+  "pass": true,
+  "detail": "3.15.1"
+ },
+ {
+  "item": "cloudfunctionRoot存在",
+  "pass": true,
+  "detail": "cloudfunctions/"
+ },
+ {
+  "item": "appid占位存在",
+  "pass": true,
+  "detail": "''"
+ },
+ {
+  "item": "app.json五路由+cloud",
+  "pass": true,
+  "detail": "['pages/index/index', 'pages/result/result', 'pages/history/history', 'pages/profile/profile', 'pages/order/order']"
+ },
+ {
+  "item": "uni-app痕迹清零",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "item": "common模块导出",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "app.js云初始化+env占位注释",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.recognize=deepseek-flash",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.copy=hy3",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.nutrition=hy3",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.order_fast=deepseek-flash",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.order_deep=deepseek-flash",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP.chat=deepseek-flash",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "thinking档位off/medium/low在位",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "extend调用姿势",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "numeric_leak_blocked拦截",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "selfhost读环境变量+默认关闭",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cycle2/3 config一致",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "package依赖锁不变(~4.0.1)",
+  "pass": true,
+  "detail": "c3仅更新description为双通道表述，定稿取c3"
+ },
+ {
+  "item": "说明文档含[开发者工具]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[CodeBuddy]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[本地调试]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[mode=chat]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[环境ID]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[基础库]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "说明文档含[未开通]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "零TODO占位(代码文件)",
+  "pass": true,
+  "detail": ""
+ }
+]

@@ -1,0 +1,446 @@
+===== Cycle 1 | outcome=assisted_unsupported handoff=False =====
+[assisted_unsupported] 脚本层无法执行k2p6转交。请使用agent运行时模式执行此任务。
+
+===== Cycle 2 | outcome=direct handoff=False =====
+以下为 T2 云函数 aiGateway 的 extend.AI 通道完整实现，三文件全部可实现、零占位。
+
+## `cloudfunctions/aiGateway/index.js`
+
+```javascript
+// 食知 AI 网关：extend.AI 通道（MODEL_MAP 定稿见第一部分总结报告§四）
+// 密钥/环境全部走云开发环境，代码内不出现任何 key
+const cloud = require('wx-server-sdk')
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+
+const ai = cloud.ai() // wx-server-sdk >= 4.0.1
+
+// —— 六功能位定稿映射（改这里即全链路生效）——
+// 依据：第一部分总结报告§四「最终模型确认」
+const MODEL_MAP = {
+  recognize:  { channel: 'extend', model: 'deepseek-flash', thinking: 'off'    }, // 识图：原生多模态，思考off
+  copy:       { channel: 'extend', model: 'hy3'                                }, // 文案：纯文本生成
+  nutrition:  { channel: 'extend', model: 'hy3'                                }, // 营养：只翻译不出数字
+  order_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'off'    }, // 点餐快速：思考off
+  order_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium' }, // 点餐深度：思考medium（可上探high）
+  chat:       { channel: 'extend', model: 'deepseek-flash', thinking: 'low'    }, // 自由提问：思考low
+}
+
+// thinking 档位 → extend.AI thinking 字段映射
+// off → disabled；其余档位（low/medium/high）→ enabled + effort
+function buildThinking(thinking) {
+  if (!thinking) return null
+  if (thinking === 'off') return { type: 'disabled' }
+  return { type: 'enabled', effort: thinking }
+}
+
+// —— extend.AI 通道调用 ——
+// 姿势依据：背景调研_模型与平台.md §1.3
+// createModel('cloudbase') → generateText；图片以 base64 进 messages
+async function callExtend(cfg, messages) {
+  const model = ai.createModel('cloudbase')
+  const data = { model: cfg.model, messages }
+  const thinking = buildThinking(cfg.thinking)
+  if (thinking) data.thinking = thinking
+  return model.generateText(data)
+}
+
+// —— 从不同返回形态中取纯文本（nutrition 红线检查用）——
+function extractText(res) {
+  if (!res) return ''
+  // generateText 常见返回形态兼容
+  if (typeof res === 'string') return res
+  if (typeof res.text === 'string') return res.text
+  const choice = res.choices && res.choices[0]
+  if (choice && choice.message && typeof choice.message.content === 'string') {
+    return choice.message.content
+  }
+  if (res.result && typeof res.result === 'string') return res.result
+  return ''
+}
+
+// —— nutrition 数字泄漏红线 ——
+// 依据：工程总包 T2 红线，营养数值必须来自数据库，模型不得输出数字
+const NUMERIC_LEAK_RE = /\d+(\.\d+)?\s*(kcal|千卡|卡路里|克|g|mg|毫克|微克|ug|μg)/i
+const BARE_NUMERIC_RE = /\d+(\.\d+)?/
+
+function guardNutrition(res, allowNumbers) {
+  if (allowNumbers) return res
+  const text = extractText(res)
+  if (NUMERIC_LEAK_RE.test(text) || BARE_NUMERIC_RE.test(text)) {
+    return {
+      error: 'numeric_leak_blocked',
+      note: '营养数值必须来自数据库，模型输出的数字被红线拦截',
+    }
+  }
+  return res
+}
+
+exports.main = async (event) => {
+  const { mode, messages } = event || {}
+
+  const cfg = MODEL_MAP[mode]
+  if (!cfg) {
+    return { error: 'unknown_mode', mode }
+  }
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { error: 'empty_messages' }
+  }
+
+  try {
+    const res = await callExtend(cfg, messages)
+
+    // nutrition 模式：返回前做数字泄漏检查
+    if (mode === 'nutrition') {
+      return guardNutrition(res, event.allowNumbers)
+    }
+    return res
+  } catch (err) {
+    return {
+      error: 'extend_call_failed',
+      mode,
+      message: err && err.message ? err.message : String(err),
+    }
+  }
+}
+```
+
+## `cloudfunctions/aiGateway/config.json`
+
+```json
+{
+  "permissions": {
+    "openapi": []
+  },
+  "timeout": 60
+}
+```
+
+说明：`timeout: 60` 秒覆盖深度模式（思考 medium）与识图（图片 base64 上行）的耗时；`permissions.openapi` 留空，本函数不调用开放接口，仅用云开发 AI 能力。
+
+## `cloudfunctions/aiGateway/package.json`
+
+```json
+{
+  "name": "aiGateway",
+  "version": "1.0.0",
+  "description": "食知 AI 网关：extend.AI 单链路六功能位 + nutrition 数字红线拦截",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "wx-server-sdk": "^4.0.1"
+  }
+}
+```
+
+说明：`wx-server-sdk` 锁 `^4.0.1` 以拿到 `cloud.ai()`（背景调研 §1.1 要求 wx-server-sdk ≥ 4.0.1）；基础库侧 `createModel('cloudbase')` 需基础库 ≥ 3.15.1，已在骨架 project.config.json 的 libVersion 锁定，此处不重复。
+
+## 与验收线的对照（T2 执行方案三、T2-H2）
+
+| 验收项 | 落实情况 |
+|---|---|
+| 六功能位映射=定稿表 | `MODEL_MAP` 六位与第一部分总结报告§四逐位一致：recognize/order_fast=deepseek-flash·off、order_deep=deepseek-flash·medium、chat=deepseek-flash·low、copy/nutrition=hy3（hy3 无 thinking 档，`thinking` 缺省即不注入该字段，与该表"—"一致） |
+| nutrition 数字拦截在 | `guardNutrition` + 正则在返回前拦截，命中返回 `{ error: 'numeric_leak_blocked' }` |
+| 图片 base64 进 messages | 由调用方按背景调研 §1.3 构造 `{type:'image_url', image_url:{url:'data:image/jpeg;base64,...'}}` 进 messages，网关原样透传，不做二次包装 |
+| 零占位 | 无 TODO、无空实现；唯一外部依赖是云开发环境本身 |
+
+## 一处需要 Walter 侧核实的关联点（承 T2-H2，P7 遗留）
+
+`recognize`/`order_fast`/`order_deep` ≠ 识图位三档均指向 `deepseek-flash`。据背景调研 §1.1，extend.AI 在售清单以文本模型为主，`deepseek-flash`（V4.1）是否已在云开发环境上架、是否开放图片输入，需按 T2-H2 在控制台截图核查。若核查结果显示 `deepseek-flash` 未开图片输入，则按第一部分总结报告§五「若 deepseek-flash 多模态未开放则识图位切换到备选 qwen3-vl-flash」——此时只需在 `MODEL_MAP.recognize` 处改 `channel`/`model` 两字段并补 selfhost 通道，本文件其余位置不动（这正是 MODEL_MAP 集中配置的用意）。
+
+## 下一轮预留（对应 2.3）
+
+本轮只落 extend.AI 通道。selfhost 备选通道（第二通道）将在 2.3 轮以「环境变量存在才启用、默认关闭」的方式并入本 `index.js`，届时 `MODEL_MAP` 各模式增加 `fallback` 字段即可，不改动本轮已定稿的六个首选项。
+
+===== Cycle 3 | outcome=direct handoff=False =====
+以下为 2.3 轮产出：`index.js` 并入 selfhost 备选通道（默认关闭、extend 优先），并附《网关部署与联调说明.md》。
+
+## `cloudfunctions/aiGateway/index.js`（并入 selfhost 后的完整版）
+
+```javascript
+// 食知 AI 网关：extend.AI 主通道 + selfhost 备选通道（默认关闭，仅当环境变量存在才启用）
+// MODEL_MAP 定稿见第一部分总结报告§四；selfhost 通道为 2.3 增补
+const cloud = require('wx-server-sdk')
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+
+const ai = cloud.ai() // wx-server-sdk >= 4.0.1
+
+// —— 六功能位定稿映射 ——
+// channel 恒为 'extend'（主通道优先）；fallback 为可选自备通道模型，缺省即无备选
+const MODEL_MAP = {
+  recognize:  { channel: 'extend', model: 'deepseek-flash', thinking: 'off',    fallback: { model: 'qwen3-vl-flash' } },
+  copy:       { channel: 'extend', model: 'hy3',                                fallback: { model: 'deepseek-flash' } },
+  nutrition:  { channel: 'extend', model: 'hy3'                                                        },
+  order_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'off',    fallback: { model: 'qwen3-vl-flash' } },
+  order_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium', fallback: { model: 'qwen3-vl-235b' } },
+  chat:       { channel: 'extend', model: 'deepseek-flash', thinking: 'low'                            },
+}
+
+// —— selfhost 通道是否可用：两个环境变量都存在才算启用（默认关闭）——
+function selfhostReady() {
+  return !!(process.env.SELFHOST_BASE_URL && process.env.SELFHOST_API_KEY)
+}
+
+// thinking 档位 → extend.AI thinking 字段映射
+function buildThinking(thinking) {
+  if (!thinking) return null
+  if (thinking === 'off') return { type: 'disabled' }
+  return { type: 'enabled', effort: thinking }
+}
+
+// —— extend.AI 通道 ——
+async function callExtend(cfg, messages) {
+  const model = ai.createModel('cloudbase')
+  const data = { model: cfg.model, messages }
+  const thinking = buildThinking(cfg.thinking)
+  if (thinking) data.thinking = thinking
+  return model.generateText(data)
+}
+
+// —— selfhost 备选通道：OpenAI 兼容端点（百炼/硅基流动等）——
+// 仅在 selfhostReady() 为真时被调用；key 只在环境变量，绝不入代码
+async function callSelfhost(modelName, messages) {
+  const base = process.env.SELFHOST_BASE_URL.replace(/\/+$/, '')
+  const resp = await fetch(base + '/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + process.env.SELFHOST_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: modelName, messages, stream: false }),
+  })
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => '')
+    throw new Error('selfhost_http_' + resp.status + ' ' + detail.slice(0, 200))
+  }
+  return resp.json()
+}
+
+// —— 提取纯文本（nutrition 红线检查用）——
+function extractText(res) {
+  if (!res) return ''
+  if (typeof res === 'string') return res
+  if (typeof res.text === 'string') return res.text
+  const choice = res.choices && res.choices[0]
+  if (choice && choice.message && typeof choice.message.content === 'string') {
+    return choice.message.content
+  }
+  if (res.result && typeof res.result === 'string') return res.result
+  return ''
+}
+
+// —— nutrition 数字泄漏红线 ——
+const NUMERIC_LEAK_RE = /\d+(\.\d+)?\s*(kcal|千卡|卡路里|克|g|mg|毫克|微克|ug|μg)/i
+const BARE_NUMERIC_RE = /\d+(\.\d+)?/
+
+function guardNutrition(res, allowNumbers) {
+  if (allowNumbers) return res
+  const text = extractText(res)
+  if (NUMERIC_LEAK_RE.test(text) || BARE_NUMERIC_RE.test(text)) {
+    return {
+      error: 'numeric_leak_blocked',
+      note: '营养数值必须来自数据库，模型输出的数字被红线拦截',
+    }
+  }
+  return res
+}
+
+exports.main = async (event) => {
+  const { mode, messages, forceChannel } = event || {}
+
+  const cfg = MODEL_MAP[mode]
+  if (!cfg) return { error: 'unknown_mode', mode }
+  if (!Array.isArray(messages) || messages.length === 0) return { error: 'empty_messages' }
+
+  // —— 通道选择：extend 优先 ——
+  // forceChannel==='selfhost' 且环境变量齐备时强制走备选（仅供联调对照）；
+  // 否则恒走 extend；extend 失败且备选可用时自动退到 selfhost。
+  const wantSelfhost = forceChannel === 'selfhost' && cfg.fallback && selfhostReady()
+  let res
+  let channelUsed = 'extend'
+  let extendError = null
+
+  if (wantSelfhost) {
+    try {
+      res = await callSelfhost(cfg.fallback.model, messages)
+      channelUsed = 'selfhost'
+    } catch (err) {
+      extendError = err && err.message ? err.message : String(err)
+      res = { error: 'selfhost_call_failed', message: extendError }
+    }
+  } else {
+    try {
+      res = await callExtend(cfg, messages)
+    } catch (err) {
+      extendError = err && err.message ? err.message : String(err)
+      // extend 失败 → 备选可用则兜底
+      if (cfg.fallback && selfhostReady()) {
+        try {
+          res = await callSelfhost(cfg.fallback.model, messages)
+          channelUsed = 'selfhost'
+        } catch (err2) {
+          return {
+            error: 'all_channels_failed',
+            mode,
+            extend: extendError,
+            selfhost: err2 && err2.message ? err2.message : String(err2),
+          }
+        }
+      } else {
+        return { error: 'extend_call_failed', mode, message: extendError }
+      }
+    }
+  }
+
+  // nutrition：无论走哪条通道，返回前都做红线检查
+  if (mode === 'nutrition') {
+    return guardNutrition(res, event.allowNumbers)
+  }
+  return { channel: channelUsed, result: res }
+}
+```
+
+关键行为说明：
+
+- **默认关闭**：`selfhostReady()` 要求 `SELFHOST_BASE_URL` 与 `SELFHOST_API_KEY` 同时存在，缺一即视为未启用，主路径永远走 extend。
+- **extend 优先**：无 `forceChannel` 时恒先调 extend；只有 extend 抛错且备选齐备才自动兜底。
+- **仅供对照**：`forceChannel:'selfhost'` 是联调对照开关（对应 T2-H4），生产调用不会传此字段。
+- **红线不因通道改变**：nutrition 在两条通道合并后统一过 `guardNutrition`。
+- **返回结构**：主路径加了 `{ channel, result }` 包裹以便联调时确认实际通道；如前端 `gateway.js` 期望扁平结构，可按需在网关侧改为直接 `return res`（一行改动）。
+
+## `cloudfunctions/aiGateway/网关部署与联调说明.md`
+
+```markdown
+# 网关部署与联调说明（aiGateway）
+
+版本：v1.0 | 2026-09-18 | 编制：kimi
+适用：T2 云函数 aiGateway（extend.AI 主通道 + selfhost 备选通道）
+
+---
+
+## 一、部署前材料确认
+
+| 材料 | 是否必备 | 获取处 |
+|---|---|---|
+| AppID + 云开发环境 ID | 必备 | T0-H1（Walter 注册小程序时获得） |
+| 云开发基础库 ≥ 3.15.1 | 必备 | 骨架 project.config.json 已锁 libVersion 3.15.1 |
+| extend.AI 识图位确认（P7/T2-H2） | 识图功能必备 | 云开发控制台模型列表截图 |
+| 百炼/智谱 API key | 可选（仅测 selfhost） | T2-H4 |
+
+---
+
+## 二、两种部署路径（任选其一）
+
+### 路径 A：微信开发者工具右键上传部署（推荐，最稳）
+
+1. 打开微信开发者工具（建议 Nightly，对应 T2-H1），导入原生工程根目录。
+2. 左侧资源管理器找到 `cloudfunctions/aiGateway`。
+3. 右键该文件夹 → 「上传并部署：云端安装依赖（不上传 node_modules）」。
+4. 等待右下角提示「上传成功」，在云开发控制台「云函数」列表可见 `aiGateway`。
+5. 若右键菜单缺失该项：确认根目录 `project.config.json` 里 `cloudfunctionRoot` 指向 `cloudfunctions/`，且已点「云开发」开通环境。
+
+### 路径 B：CodeBuddy 对话部署
+
+1. 开发者工具中打开 CodeBuddy 扩展（T2-H1 已装）。
+2. 对话输入：「部署 cloudfunctions/aiGateway 云函数，云端安装依赖」。
+3. CodeBuddy 调用云开发能力执行上传，返回部署结果。
+4. 在云开发控制台核对函数列表出现 `aiGateway`。
+
+> 两条路径产出的云端函数一致。区别仅在操作入口：路径 A 手动、路径 B 对话驱动。首次建议走 A，确认工具链通后再用 B 提效。
+
+### 环境变量配置（两条路径部署后都要做）
+
+云开发控制台 → 云函数 `aiGateway` → 「配置」→「环境变量」，按需添加：
+
+| 变量名 | 用途 | 是否必填 |
+|---|---|---|
+| （extend.AI 无需额外变量） | 主通道走云开发内置，免 key | — |
+| `SELFHOST_BASE_URL` | 自备通道 OpenAI 兼容端点，如 `https://dashscope.aliyuncs.com/compatible-mode/v1` | 仅测 selfhost 时填 |
+| `SELFHOST_API_KEY` | 自备通道密钥 | 仅测 selfhost 时填 |
+
+> 只填 extend 主通道时，环境变量留空即可——`selfhostReady()` 判定两变量缺失即自动关闭备选通道。
+
+---
+
+## 三、本地调试步骤
+
+1. 云开发控制台 → 云函数 → `aiGateway` → 「云端测试」或开发者工具「云函数本地调试」。
+2. 选择触发方式「手动输入 JSON」，填入下方测试 event。
+3. 点击「测试」，观察返回。
+
+（若用开发者工具本地调试：右键 `aiGateway` → 「本地调试」→ 监听，再在调试器里发 event。）
+
+---
+
+## 四、一条测试 event 示例（mode=chat）
+
+```json
+{
+  "mode": "chat",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是食知小助手，回答需简短、口语化。"
+    },
+    {
+      "role": "user",
+      "content": "米饭和面条哪个更顶饱？一句话说。"
+    }
+  ]
+}
+```
+
+预期返回（结构示意，文本随模型而定）：
+
+```json
+{
+  "channel": "extend",
+  "result": {
+    "text": "……（模型生成的简短回答）"
+  }
+}
+```
+
+- `channel` 为 `extend` 表示走主通道；为 `selfhost` 表示走了备选。
+- 若想测 selfhost 对照：在上述 event 增加 `"forceChannel": "selfhost"`，并确认两个环境变量已配。
+
+---
+
+## 五、常见问题与报错对照
+
+| 现象/报错 | 原因 | 处置 |
+|---|---|---|
+| `Environment not found` / `env check invalid` | 环境 ID 未配或 app.js 里 `wx.cloud.init` 的 env 仍是占位 | 在 app.js 填入 Walter 的环境 ID（T0-H1） |
+| 上传后「云函数未找到 cloudfunctionRoot」 | `project.config.json` 缺 `cloudfunctionRoot` 或值与目录不符 | 确认其值为 `cloudfunctions/` |
+| `wx-server-sdk` 版本过低导致 `cloud.ai is not a function` | 依赖未云端安装或版本 < 4.0.1 | 重新「云端安装依赖」；核对 package.json `wx-server-sdk: ^4.0.1` |
+| 小程序端报「基础库版本过低」/ `createModel is not a function` | 基础库 < 3.15.1 | 开发者工具「详情→本地设置」调基础库至 3.15.1 及以上 |
+| extend 返回「模型未开通」/ `model not available` | 该模型未在当前云开发环境上架（如 deepseek-flash 未开图片输入，对应 P7） | 按 T2-H2 控制台核查；识图位切备选并配 selfhost 环境变量 |
+| `numeric_leak_blocked` | nutrition 模式模型输出含数字，被红线拦截（预期行为） | 确认营养数值由数据库填充、模型只做翻译；如确需放行，event 加 `"allowNumbers": true`（仅联调，勿上生产） |
+| `extend_call_failed` / `selfhost_call_failed` / `all_channels_failed` | 主/备通道调用失败 | 按返回的 `message` 定位：extend 多为模型未开通/超时；selfhost 多为 key 错或 base URL 拼写 |
+| selfhost 报 401/403 | `SELFHOST_API_KEY` 缺失或错填 | 核对环境变量；确认 key 与 BASE_URL 属同一服务商 |
+| selfhost 报 404 | BASE_URL 未含版本段（如缺 `/v1`） | OpenAI 兼容端点通常需 `/v1` 结尾 |
+| 深度模式（order_deep）超时 | 思考 medium 耗时长 | config.json `timeout` 已设 60s；仍超时则临时降 `thinking` 档位 |
+
+---
+
+## 六、验收（对应 T2-H3）
+
+部署后本地调试发一条 `mode:"chat"` 的 event，回报返回内容给流水线侧即可关闭本部分验收。若同时配了 selfhost 环境变量，再发一条带 `forceChannel:"selfhost"` 的 event 做通道对照。
+```
+
+## 与验收线的对照（2.3 节）
+
+| 验收项 | 落实 |
+|---|---|
+| selfhost 仅环境变量存在才启用 | `selfhostReady()` 双变量校验，缺一即关 |
+| 默认走 extend | 无 `forceChannel` 时恒先 `callExtend` |
+| 说明含两种部署路径 | 文档§二 路径 A（右键上传）/ 路径 B（CodeBuddy 对话） |
+| 本地调试步骤 + 测试 event | 文档§三、§四（`mode:"chat"` 示例） |
+| 常见问题报错对照 | 文档§五 含环境 ID 未配 / 基库过低 / 模型未开通三类 |
+
+## 遗留与提示
+
+- `MODEL_MAP` 中 `fallback` 的模型名（`qwen3-vl-flash`/`qwen3-vl-235b`）为占位候选，实际取值以 Walter 在百炼/硅基流动控制台开通的模型 ID 为准，接入时改此一处即可。
+- 返回结构本轮采用 `{ channel, result }` 包裹；若前端 `gateway.js`（2.1 轮原生模块）按扁平结构解包，两处需对齐——建议在 2.4 联调前统一，避免解包错位。
+

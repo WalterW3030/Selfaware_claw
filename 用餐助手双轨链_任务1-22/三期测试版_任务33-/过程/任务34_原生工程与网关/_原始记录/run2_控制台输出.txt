@@ -1,0 +1,16 @@
+[BIND] script_sha=4ded729b75670794000d1c38829632a9826d342b5e0ace96e5ce216521485566
+[BIND] context_sha=99a2f4ef6bac78529443aeba5d93ca0a222b17767e73a781e630523a4a160d9f bytes=21715
+[BIND] env: MAX_TOKENS=8192 model=deepseek-v4-flash mode=multi_turn rounds=3
+[ENV] 执行前环境声明：无待处理缓冲消息（7条缓冲已全部处理，最新指令=任务34派发 2026-09-23T14:26:51+08:00；run1失败已登记ERR-20260923-001，本次为A2恰好1次重试）
+[Cycle 1] outcome=direct handoff=False reply=
+[Cycle 2] outcome=assisted_unsupported handoff=False reply=[assisted_unsupported] 脚本层无法执行k2p6转交。请使用agent运行时模式执行此任务。
+[Cycle 3] outcome=direct handoff=False reply=第3轮所需输入(selfhost通道要求、部署路径、测试event、常见问题对照)均已具备,属能力内任务,直接产出。
+
+[ASSERT PASS] cycle1: len=11(exp=11) system_v44=True context_injected=True tail_verbatim=True
+[ASSERT PASS] cycle2: len=13(exp=13) system_v44=True context_injected=True tail_verbatim=True
+[ASSERT FAIL] cycle3: len=25(exp=15) system_v44=True context_injected=True tail_verbatim=True
+[TIMING] wall_clock_total=77.588s start=1790146051.409 end=1790146128.998
+[CYCLE] id=1 outcome=direct handoff=False dur_ms=39154
+[CYCLE] id=2 outcome=assisted_unsupported handoff=False dur_ms=25439
+[CYCLE] id=3 outcome=direct handoff=False dur_ms=12995
+[STRUCT_ASSERT]HAS_FAILURE

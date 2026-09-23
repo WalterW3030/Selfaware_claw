@@ -321,14 +321,6 @@ def process_cycle(cycle_id: int, question: str, history: Optional[List[Dict]] = 
 
     if detect_exceed_declaration(step1_response):
         # 转交k2p6 -- 脚本层无法执行,需agent运行时处理
-        # 修复(ERR-20260923-001/002,任务35):exceed分支此前把全量step1_messages
-        # (含重复system/context/预载,共12条)注入multi_turn后续轮history,
-        # 导致结构膨胀(实测23/25≠13/15)。改为只追加当轮[user,assistant]对,
-        # 与direct分支的累积方式保持一致;non-multi_turn模式下history本就丢弃,行为不变。
-        exceed_history = list(history or []) + [
-            {"role": "user", "content": question},
-            {"role": "assistant", "content": step1_response},
-        ]
         if DRY_RUN and stub:
             # 干跑:标记为需agent运行时处理,不生成假数据
             t2 = now_ms()
@@ -336,7 +328,7 @@ def process_cycle(cycle_id: int, question: str, history: Optional[List[Dict]] = 
             return (
                 "[assisted_needs_agent] Step1已声明exceed,"
                 "需agent运行时通过sessions_spawn调用k2p6完成后续步骤。",
-                exceed_history,
+                step1_messages,
                 log
             )
         else:
@@ -346,7 +338,7 @@ def process_cycle(cycle_id: int, question: str, history: Optional[List[Dict]] = 
             return (
                 "[assisted_unsupported] 脚本层无法执行k2p6转交。"
                 "请使用agent运行时模式执行此任务。",
-                exceed_history,
+                step1_messages,
                 log
             )
 

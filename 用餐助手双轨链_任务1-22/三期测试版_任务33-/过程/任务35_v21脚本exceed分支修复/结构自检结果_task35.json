@@ -1,0 +1,68 @@
+{
+ "A_stub_exceed": {
+  "outcomes": [
+   "assisted_needs_agent",
+   "assisted_needs_agent",
+   "assisted_needs_agent"
+  ],
+  "lens": [
+   11,
+   13,
+   15
+  ],
+  "expect_lens": [
+   11,
+   13,
+   15
+  ],
+  "wall": 0.0
+ },
+ "B_live_control": {
+  "outcomes": [
+   "direct",
+   "direct",
+   "direct"
+  ],
+  "lens": [
+   11,
+   13,
+   15
+  ],
+  "expect_lens": [
+   11,
+   13,
+   15
+  ],
+  "replies_nonempty": true,
+  "wall": 1.962
+ },
+ "C_live_exceed": {
+  "outcomes": [
+   "assisted_unsupported",
+   "direct",
+   "direct"
+  ],
+  "lens": [
+   11,
+   13,
+   15
+  ],
+  "expect_lens": [
+   11,
+   13,
+   15
+  ],
+  "pre_fix_would_be": [
+   12,
+   23,
+   25
+  ],
+  "wall": 2.561
+ },
+ "VERDICT": {
+  "A": true,
+  "B": true,
+  "C": true,
+  "ALL_PASS": true
+ }
+}

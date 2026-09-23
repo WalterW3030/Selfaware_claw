@@ -1,0 +1,60 @@
+<view class="order-page">
+  <view class="title">{{pageTitle}}</view>
+
+  <!-- 双模式切换（沿用任务32） -->
+  <view class="mode-bar">
+    <button size="mini" bindtap="setFast" disabled="{{mode === 'fast'}}">⚡ 快速分析</button>
+    <button size="mini" bindtap="setDeep" disabled="{{mode === 'deep'}}">🍽 深度分析</button>
+  </view>
+
+  <!-- 拍菜单 -->
+  <button bindtap="handleMenuCapture">拍菜单 / 从相册选择</button>
+
+  <!-- [任务36] 三语选择器：三语均可选用于翻译；粤语标注播报即将支持 -->
+  <view class="lang-bar">
+    <view class="lang-item {{translateLang === 'zh_CN' ? 'active' : ''}}"
+          data-lang="zh_CN" bindtap="onPickLang">普通话</view>
+    <view class="lang-item {{translateLang === 'en_US' ? 'active' : ''}}"
+          data-lang="en_US" bindtap="onPickLang">English</view>
+    <view class="lang-item {{translateLang === 'yue' ? 'active' : ''}} {{!yueTtsReady ? 'disabled' : ''}}"
+          data-lang="yue" bindtap="onPickLang">粤语<text wx:if="{{!yueTtsReady}}" class="badge">(播报即将支持)</text></view>
+  </view>
+
+  <!-- [任务36] 翻译入口：门禁通过后才可用 -->
+  <button bindtap="handleTranslate"
+          disabled="{{!menuConfirmed || translating}}">
+    🌐 翻译菜单{{translating ? '（翻译中…）' : ''}}
+  </button>
+
+  <!-- [任务36] 原文-译文对照展示 -->
+  <view class="translate-result" wx:if="{{translateResult}}">
+    <view wx:if="{{translateResult.fallback}}" class="hint">翻译失败，已展示原文</view>
+    <view class="row" wx:for="{{translateResult.list}}" wx:key="index">
+      <text class="col-src">{{item.name}}</text>
+      <text class="col-dst">{{item.translation}}</text>
+    </view>
+  </view>
+
+  <!-- [任务36] 生成点餐话术 -->
+  <button bindtap="handleGenPhrase" disabled="{{!candidates.length}}">🎙 生成点餐话术</button>
+
+  <!-- [任务36] 话术展示 + 可编辑 + 确认 -->
+  <view class="phrase-box" wx:if="{{phraseText}}">
+    <textarea value="{{phraseText}}" bindinput="onPhraseEdit" auto-height />
+    <button bindtap="confirmPhrase" disabled="{{phraseConfirmed}}">
+      {{phraseConfirmed ? '✔ 话术已确认' : '确认话术'}}
+    </button>
+  </view>
+
+  <!-- [任务36] 播报按钮：话术确认后可用；粤语未就绪置灰 -->
+  <button bindtap="handleSpeak"
+          disabled="{{!phraseConfirmed || speaking || (translateLang === 'yue' && !yueTtsReady)}}">
+    {{speaking ? '播报中…' : '🔊 播报'}}
+  </button>
+
+  <!-- [任务36] TTS 失败降级：展示文本让用户自己念 -->
+  <view class="tts-fallback" wx:if="{{ttsFallbackText}}">
+    <view class="hint">播报失败，请照此向服务员点单：</view>
+    <text>{{ttsFallbackText}}</text>
+  </view>
+</view>

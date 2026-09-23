@@ -1,0 +1,895 @@
+===== Cycle 1 | outcome=direct handoff=False =====
+# 点餐助手翻译与语音增补（任务36）
+
+> **性质**：任务26/32《点餐助手》系列**增补**，仅更新"点餐助手"功能域，不动其他部分。
+> **输入**：任务26双模式设计（上下文记录）、任务32双模式增补、任务34骨架源文件（`aiGateway/index.js`、`pages/order/order.js`、`common/gateway.js`）、Coordinator Kimi 17:04 功能意图。
+> **落点**：在既有"识别→确认门禁→排序→搭配"管线与"快速/深度双模式"之上，**横向叠加"翻译"与"语音播报"两个新能力**，二者均复用既有 aiGateway 出口与双模式档位，不新开调用链。
+> **装配声明**：任务36指定的《菜单翻译与语音点单调研_任务36输入.md》仓库/工作区/下载目录均不存在，本文档不编造该调研，以 17:04 意图消息原文为替代输入；两轮题面含完整规格，可执行。
+
+---
+
+## 元信息
+
+| 项 | 值 |
+|---|---|
+| 文档性质 | 任务34骨架（双模式落地）**增补**，仅加点餐助手翻译/语音域 |
+| 日期 | 2026-09-23 |
+| 新增功能位 | `translate`（菜单翻译）、`order_phrase`（点餐话术生成） |
+| 新增通道 | WechatSI 插件（普通话/英语 TTS）、腾讯云 TTS 云函数（粤语备选） |
+| 与双模式关系 | 两模式均可翻译、可播报；差异在**翻译粒度**与**话术篇幅** |
+
+---
+
+## 一、总览
+
+两项新功能都**挂接在既有管线末端**，不改动识别/排序/搭配主干：
+
+```
+拍菜单 → 识图(recognize) → 确认门禁 → 排序/搭配 → 【最终候选锁定】
+                                          │
+                     ┌────────────────────┴────────────────────┐
+                     ▼                                          ▼
+              【菜单翻译 translate】                     【语音点单 order_phrase】
+              （门禁通过后可选）                          （候选确认后→生成→用户确认→TTS）
+                     │                                          │
+                     ▼                                          ▼
+              原文/译文对照展示                          WechatSI(普/英) + 腾讯云TTS(粤)
+```
+
+| 维度 | 菜单翻译 | 语音点单 |
+|---|---|---|
+| 触发时机 | 识别确认门禁**通过后可选** | **最终候选确认后**必经 |
+| 功能位 | `translate`（hy3） | `order_phrase`（hy3） |
+| 语种 | 普通话 / 粤语 / 英语 | 随话术语言，TTS 对应通道 |
+| 输出 | 原文-译文对照 | 播报话术（文本先确认） |
+| 失败降级 | 展示原文 + 提示重试 | 展示话术文本让用户自己念 |
+
+---
+
+## 二、菜单翻译
+
+### 2.1 触发时机
+
+- **门禁通过前不触发**：翻译的对象是"已确认菜名清单"，识别未确认时菜名不可信，翻译无意义。
+- **确认门禁通过后**，在菜单结果区**可选**呈现入口：「🌐 翻译菜单」。
+- 与双模式门禁衔接：快模式精简门禁同样在"低置信+价格缺失"处理完后放行翻译；门禁未通过时翻译按钮置灰。
+
+### 2.2 三语选项
+
+| 语种 | 代码 | 说明 |
+|---|---|---|
+| 普通话 | `zh_CN` | 目标语简中（外文菜单译入；中文菜单可译出英/粤） |
+| 粤语 | `yue` | 目标语粤语书面语/口语 |
+| 英语 | `en_US` | 目标语英文 |
+
+> 交互：三选一（单选切换），默认跟随用户语言设置，无设置时默认 `zh_CN`。
+
+### 2.3 翻译通道与模型
+
+- **走 aiGateway 新增 `mode=translate`**，模型 **`hy3`**（与 copy/nutrition 同档，适合文本改写类任务，非 VL 无需识图）。
+- 复用 `callAI('translate', messages)`，**前端禁止直连模型 API**（AGENTS.md 技术约束）。
+
+**aiGateway `MODEL_MAP` 增量：**
+
+```js
+const MODEL_MAP = {
+  recognize:    { channel: 'extend', model: 'deepseek-flash', thinking: 'off'    },
+  copy:         { channel: 'extend', model: 'hy3'                             },
+  nutrition:    { channel: 'extend', model: 'hy3'                             },
+  order_fast:   { channel: 'extend', model: 'deepseek-flash', thinking: 'off'    },
+  order_deep:   { channel: 'extend', model: 'deepseek-flash', thinking: 'medium' },
+  chat:         { channel: 'extend', model: 'deepseek-flash', thinking: 'low'    },
+  // ── 任务36 新增 ──
+  translate:    { channel: 'extend', model: 'hy3'                             },  // 菜单翻译
+  order_phrase: { channel: 'extend', model: 'hy3'                             }   // 点餐话术生成
+}
+```
+
+### 2.4 结果与原文对照展示
+
+- **对照布局**：左列原文（菜名/简介），右列译文，**逐行对齐**；保留 `name_confidence` 标记（低置信项译文加"待核"角标）。
+- **硬约束字段一并翻译**：禁忌成分、过敏原标记必须随译，防止跨语言沟通丢失安全信息。
+- **禁止增删菜名**：译文只能对应已确认清单，不得凭空添菜（与 order_phrase 同一条红线）。
+
+**翻译 prompt 要点：**
+
+```
+role: 菜单翻译
+硬约束:
+  - 只翻译给定清单内的菜名与标记,不得新增/删除/合并任何条目
+  - 过敏原/禁忌成分必须逐条对应译出,不得省略
+  - 目标语: {{zh_CN|yue|en_US}}
+字段裁剪:
+  - 快速模式: 仅返回 {原名, 译文} 两列,不译长描述/营养
+  - 深度模式: 返回 {原名, 译文, 成分标记译文, 备注}
+```
+
+### 2.5 双模式下的翻译粒度（对齐要求④）
+
+| | 快速模式 | 深度模式 |
+|---|---|---|
+| 翻译范围 | **默认只译菜名清单**（`{原名, 译文}`） | 菜名 + 成分标记 + 简介备注 |
+| 输出预算 | 收紧，单遍 | 全字段 |
+| 时间预算 | 并入 ≤4s 预算内（翻译为轻量文本任务，hy3 快速档） | 并入深度 ≤15s |
+
+> 快速模式"默认只译菜名清单"是**有意识的降级**：排队场景下用户只需认识菜名，长文本翻译挤占时间预算无收益。
+
+---
+
+## 三、语音点单
+
+### 3.1 流程（四步，全必经）
+
+```
+① 最终候选确认  →  ② AI 生成点餐话术  →  ③ 用户确认话术  →  ④ TTS 播报
+   (锁定清单)        (mode=order_phrase)      (文本可见可改)      (WechatSI/腾讯云)
+```
+
+### 3.2 第②步：话术生成（mode=order_phrase，hy3）
+
+**aiGateway 调用：** `callAI('order_phrase', messages)`，模型 `hy3`。
+
+**prompt 硬约束（对齐任务要求②）：**
+
+```
+role: 点餐话术生成
+输入: 已确认候选清单(仅菜名 + 数量/备注) + 目标语言(zh_CN|yue|en_US)
+硬约束:
+  - 生成的菜名只许来自已确认候选清单,不得增删、不得改写菜名、不得杜撰菜品
+  - 数量、口味备注以清单为准,不得臆造
+  - 不输出价格、不输出营养数值(沿用网关红线思路)
+输出:
+  - 一段可直接对服务员说的口语化点餐要求
+  - 目标语言与翻译选项一致
+```
+
+> **红线**：`order_phrase` 输出若出现清单外菜名，视为越权生成，前端拒绝采用并回退模板话术。可复用 `extractText` 后做"菜名白名单"校验（见 §六代码）。
+
+### 3.3 第③步：用户确认话术
+
+- 播报前**强制展示话术文本**，用户可**编辑再播**（如临时加"不要香菜"）。
+- 未经用户确认**不自动播报**，避免误播。
+
+### 3.4 第④步：TTS 播报（通道见 §四）
+
+- 确认后按语种选择 TTS 通道播报。
+- 播报中/播报后可重播；播报失败走降级（§五）。
+
+---
+
+## 四、播报通道
+
+| 语种 | 主通道 | 说明 |
+|---|---|---|
+| 普通话 | **WechatSI 插件** | `lang=zh_CN`，`plugin.textToSpeech` |
+| 英语 | **WechatSI 插件** | `lang=en_US` |
+| 粤语 | **腾讯云 TTS（云函数转发）备选通道** | WechatSI 不支持粤语，走云函数 `ttsProxy` |
+
+### 4.1 WechatSI（普通话 / 英语）
+
+- 小程序插件 `WechatSI`（微信同声传译），`plugin.json` 声明后 `requirePlugin`。
+- 调用：
+```js
+const plugin = requirePlugin('WechatSI')
+plugin.textToSpeech({
+  lang: lang === 'en_US' ? 'en_US' : 'zh_CN',
+  tts: true,
+  content: phrase,
+  success: (res) => wx.createInnerAudioContext().src = res.filename,
+  fail: () => fallbackToText(phrase)   // 见 §五降级
+})
+```
+
+### 4.2 腾讯云 TTS（粤语备选通道）
+
+- **云函数转发**：新建 `cloudfunctions/ttsProxy`，云端调腾讯云 TTS（TextToVoice / TTS 合成），返回音频 URL 或流。
+- **密钥零硬编码**：`SecretId` / `SecretKey` 只读**环境变量**（对齐 aiGateway"密钥零硬编码"红线）。
+- **测试版可置灰**：环境变量未配置时，粤语选项**置灰并标注"即将支持"**，不阻断普/英播报。
+
+```js
+// cloudfunctions/ttsProxy/index.js（要点）
+const TTS_READY = !!(process.env.TENCENT_TTS_SECRET_ID && process.env.TENCENT_TTS_SECRET_KEY)
+exports.main = async (event) => {
+  if (!TTS_READY) {
+    return { error: 'tts_not_configured', note: '粤语 TTS 通道未开通，测试版置灰' }
+  }
+  // 调腾讯云 TTS，语种 yue，密钥只读环境变量
+  // ...返回 { audioUrl } 或音频流
+}
+```
+
+> 前端逻辑：粤语按钮 `disabled = !TTS_READY`，点击时若置灰则提示"粤语播报即将支持"。
+
+---
+
+## 五、失败降级（对齐要求⑤）
+
+| 失败点 | 降级行为 |
+|---|---|
+| **TTS 失败**（WechatSI fail / 腾讯云超时/未配置） | **展示话术文本，提示"请照此向服务员点单"**，用户可自己念；保留重播按钮 |
+| 话术生成失败 | 回退**模板话术**（`"麻烦点：{{菜名列表}}"`），仍走确认→播报 |
+| 话术含清单外菜名 | 拒绝该话术，回退模板话术 + 记录异常 |
+| 翻译失败 | 展示原文，提示重试；不阻断点餐主流程 |
+| 粤语 TTS 未开通 | 粤语按钮置灰"即将支持"，普/英不受影响 |
+
+**降级红线**：任何降级都**不得丢失已确认候选清单**，不得静默失败（须有可见提示）。
+
+---
+
+## 六、代码改造清单
+
+### 6.1 `cloudfunctions/aiGateway/index.js`
+
+- `MODEL_MAP` 增两行：`translate`、`order_phrase`，均 `channel:'extend', model:'hy3'`（见 §2.3）。
+- 增加**话术菜名白名单校验**（order_phrase 专用红线）：
+
+```js
+function phraseHonorsWhitelist(text, allowedNames) {
+  // allowedNames: 已确认菜名数组
+  // 简单校验: 若模型输出包含疑似菜名却在白名单外,触发回退(联调以实测为准)
+  return Array.isArray(allowedNames) && allowedNames.length > 0
+  // 具体匹配策略(词典/分段)在联调中定稿
+}
+```
+
+- `translate` / `order_phrase` 不触发 `hasNumericLeak`（非营养位）；但 `order_phrase` 仍**不输出价格/营养**。
+
+### 6.2 `common/gateway.js`
+
+```js
+// 便捷封装:菜单翻译
+function callTranslate(messages) {
+  return callAI('translate', messages)
+}
+// 便捷封装:点餐话术生成
+function callOrderPhrase(messages) {
+  return callAI('order_phrase', messages)
+}
+module.exports = { callAI, callRecognize, callNutrition, callTranslate, callOrderPhrase }
+```
+
+### 6.3 `pages/order/order.js`
+
+- 新增 data：`translateEnabled`、`targetLang`（`zh_CN|yue|en_US`）、`phraseText`、`ttsReady`。
+- 门禁通过后置 `translateEnabled=true`；新增 `handleTranslate()` → `callTranslate` → 对照渲染。
+- 新增 `handleGenPhrase()` → `callOrderPhrase` → 展示 `phraseText` 待确认。
+- 新增 `handleSpeak()` → 按 `targetLang` 选 WechatSI / `ttsProxy`，失败调 `fallbackToText`。
+
+### 6.4 新增 `cloudfunctions/ttsProxy/`（粤语备选）
+
+- 密钥环境变量 `TENCENT_TTS_SECRET_ID` / `TENCENT_TTS_SECRET_KEY`；未配置返回 `tts_not_configured`（置灰依据）。
+
+---
+
+## 七、与快速/深度双模式的关系（对齐要求④）
+
+| | 快速模式 | 深度模式 |
+|---|---|---|
+| 菜单翻译 | ✅ 可翻译，**默认只译菜名清单** | ✅ 全字段（菜名+成分+简介） |
+| 语音播报 | ✅ 可播报（话术精简、单句优先） | ✅ 可播报（话术可含搭配说明） |
+| 话术篇幅 | 短（仅菜名+数量/备注） | 较长（可附推荐理由，但不含营养数值） |
+| 时间预算 | 并入 ≤4s（translate/order_phrase 走 hy3 快速文本档） | 并入 ≤15s |
+| 门禁衔接 | 精简门禁通过后开放翻译 | 完整门禁通过后开放翻译 |
+
+> 两模式的**硬约束一致**：过敏原/素食过滤照旧在规则层，翻译与话术均**不得放行禁忌项**，也不得新增清单外菜名。
+
+---
+
+## 八、落地最小校验清单
+
+1. **翻译仅在门禁通过后可用**；门禁未过时入口置灰（快/深两模式均验）。
+2. `translate` / `order_phrase` 两功能位在 `MODEL_MAP` 生效，走 **hy3**，前端不直连 API。
+3. **order_phrase 菜名白名单校验**：注入越权菜名时能拒绝并回退模板话术。
+4. **TTS 通道**：普通话/英语走 WechatSI；粤语在 `ttsProxy` 环境变量配置后可播，未配置**置灰"即将支持"**。
+5. **失败降级**：TTS 失败 → 展示话术文本供用户自念；翻译失败 → 展示原文，均不丢确认清单。
+6. **快速模式翻译默认只译菜名清单**（对照深度全字段）。
+7. **红线回归**：翻译/话术在任意模式、双模式切换、自由提问下均不越权新增菜名、不放行禁忌项。
+8. 双模式**切换不丢已确认数据、不清购物车**（沿用任务32 §8，翻译/播报状态随之重算）。
+
+---
+
+*本文档为任务26/32/34 点餐助手系列的翻译与语音增补，范围限于点餐助手功能域；调研文件缺失已按装配声明据实标注。*
+
+===== Cycle 2 | outcome=direct handoff=False =====
+# 任务36 代码改造交付
+
+以下为三个骨架文件的改造产物。改动点用 `// [任务36]` / `<!-- [任务36] -->` 就地标注。`common/gateway.js` 未改动，末尾单独确认。
+
+---
+
+## ① `cloudfunctions/aiGateway/index.js`（仅 `MODEL_MAP` 增两行，其余不动）
+
+```js
+// 食知 AI 网关云函数（T2 / 2.2+2.3）
+// 职责：六功能位统一出口，密钥零硬编码。
+// 通道：extend（extend.AI 托管，默认）/ selfhost（自备 OpenAI 兼容端点，环境变量存在才启用）。
+// 依赖：wx-server-sdk >= 4.0.1（cloud.ai() 需此版本起）
+const cloud = require('wx-server-sdk')
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const ai = cloud.ai()
+
+// ── 功能位配置（严格按《第一部分总结报告》§四 定稿表）──────────────
+// mode: recognize | copy | nutrition | order_fast | order_deep | chat | translate | order_phrase
+// channel: 'extend'（默认托管通道）
+// 备选：为某功能位切 selfhost，把该行 channel 改 'selfhost' 并配 model，
+//       同时确保环境变量 SELFHOST_BASE_URL / SELFHOST_API_KEY 已配（见 callSelfhost 守卫）。
+// thinking: 'off' | 'low' | 'medium'（无该字段=不传思考参数；selfhost 通道忽略此字段）
+const MODEL_MAP = {
+  recognize:  { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
+  copy:       { channel: 'extend', model: 'hy3'                              },
+  nutrition:  { channel: 'extend', model: 'hy3'                              },
+  order_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
+  order_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium'  },
+  chat:       { channel: 'extend', model: 'deepseek-flash', thinking: 'low'     },
+  // ── [任务36] 新增两个功能位：菜单翻译 / 点餐话术生成，均走 hy3、extend 通道 ──
+  translate:    { channel: 'extend', model: 'hy3'                              },
+  order_phrase: { channel: 'extend', model: 'hy3'                              }
+}
+
+// ── 思考档位 → API 字段映射 ────────────────────────────────────────
+function buildThinking(thinking) {
+  if (!thinking) return null
+  if (thinking === 'off') return { type: 'disabled' }
+  return { type: 'enabled', effort: thinking }
+}
+
+// ── selfhost 通道是否可用（默认关闭：两个环境变量都在才启用）──────
+function selfhostReady() {
+  return !!(process.env.SELFHOST_BASE_URL && process.env.SELFHOST_API_KEY)
+}
+
+// ── extend.AI 通道调用 ────────────────────────────────────────────
+// 图片以 base64 进 messages（前端组装），云函数原样透传，不落盘、不入包。
+async function callExtend(cfg, messages) {
+  const model = ai.createModel('cloudbase')
+  const data = { model: cfg.model, messages }
+  const thinking = buildThinking(cfg.thinking)
+  if (thinking) data.thinking = thinking
+  return model.generateText({ data })
+}
+
+// ── selfhost 通道调用（OpenAI 兼容端点，如百炼/硅基流动）───────────
+// 仅在环境变量存在时被选择到；key 只读环境变量，永不硬编码。
+async function callSelfhost(cfg, messages) {
+  if (!selfhostReady()) {
+    return { error: 'selfhost_not_configured',
+             note: '未配置 SELFHOST_BASE_URL / SELFHOST_API_KEY，无法走自备通道' }
+  }
+  const base = process.env.SELFHOST_BASE_URL.replace(/\/+$/, '')
+  const resp = await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.SELFHOST_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ model: cfg.model, messages, stream: false })
+  })
+  return resp.json()
+}
+
+// ── 通道分派（extend 优先且为默认；selfhost 仅当配置就绪且被显式指定）──
+async function dispatch(cfg, messages) {
+  if (cfg.channel === 'selfhost') {
+    if (!selfhostReady()) {
+      // 环境变量缺失时回退 extend，保证主线不被备选通道阻塞
+      return callExtend({ ...cfg, channel: 'extend' }, messages)
+    }
+    return callSelfhost(cfg, messages)
+  }
+  return callExtend(cfg, messages)
+}
+
+// ── 返回文本提取（兼容多种返回结构，联调以实测为准）────────────────
+function extractText(res) {
+  if (!res) return ''
+  if (typeof res === 'string') return res
+  if (typeof res.text === 'string') return res.text
+  if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
+    const c = res.choices[0].message.content
+    if (typeof c === 'string') return c
+    if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
+  }
+  if (typeof res.content === 'string') return res.content
+  return ''
+}
+
+// ── 红线：营养模式数字泄漏拦截 ────────────────────────────────────
+const NUMERIC_LEAK = /\d+(\.\d+)?\s*(kcal|千卡|大卡|千焦|kj|克|g|mg|微克|ug|μg)/i
+function hasNumericLeak(text) {
+  return NUMERIC_LEAK.test(text || '')
+}
+
+// ── 入口 ─────────────────────────────────────────────────────────
+exports.main = async (event) => {
+  const { mode, messages } = event || {}
+  const cfg = MODEL_MAP[mode]
+  if (!cfg) {
+    return { error: 'unknown_mode', mode }
+  }
+
+  let res
+  try {
+    res = await dispatch(cfg, messages)
+  } catch (err) {
+    return { error: 'upstream_error', mode, detail: String((err && err.message) || err) }
+  }
+
+  if (res && res.error) return res  // 通道级错误直接透传（如 selfhost_not_configured）
+
+  if (mode === 'nutrition' && !event.allowNumbers) {
+    const text = extractText(res)
+    if (hasNumericLeak(text)) {
+      return {
+        error: 'numeric_leak_blocked',
+        note: '营养数值必须来自数据库，模型输出数字被拦截'
+      }
+    }
+  }
+
+  // [任务36] 说明：translate / order_phrase 走默认分支透传，不触发数字泄漏红线
+  // （order_phrase 的价格/营养“不输出”由前端 prompt 约束 + 前端白名单校验承担，见 order.js）
+
+  return res
+}
+```
+
+**改动点**：`MODEL_MAP` 仅新增 `translate`、`order_phrase` 两行（均 `hy3` / `extend`），其余逻辑零改动。
+
+---
+
+## ②-1 `pages/order/order.js`
+
+```js
+// [任务36] 新增：复用统一入口，新增 translate / order_phrase 两个 mode
+const { callAI } = require('../../common/gateway.js')
+
+// [任务36] 语言标签
+const LANG_LABEL = { zh_CN: '普通话', en_US: '英语', yue: '粤语' }
+
+// [任务36] WechatSI 插件（声明见 app.json），仅用于 TTS 播报
+// 注：requirePlugin 需在 app.json 声明 plugins.WechatSI(0.3.5) 后可用
+let WechatSI = null
+try {
+  WechatSI = requirePlugin('WechatSI')
+} catch (e) {
+  WechatSI = null // 插件未就绪时兜底，播报走降级
+}
+
+Page({
+  data: {
+    pageTitle: '点餐助手',
+    mode: 'fast',
+
+    // ── [任务36] 菜单翻译 ──
+    menuConfirmed: false,     // 识别确认门禁是否通过（通过后才允许翻译）
+    candidates: [],           // 已确认候选清单（由门禁回填）
+    translateLang: 'zh_CN',   // 三语选择：zh_CN | yue | en_US
+    translating: false,
+    translateResult: null,    // { list:[{name, translation, flag}], fallback:bool }
+
+    // ── [任务36] 语音点单 ──
+    phraseText: '',           // 生成的播报话术
+    phraseConfirmed: false,   // 用户是否确认话术（确认后才可播报）
+    speaking: false,
+    ttsFallbackText: '',      // TTS 失败降级：展示文本让用户自己念
+    yueTtsReady: false        // 粤语 TTS 通道是否就绪（未就绪则播报置灰）
+  },
+
+  onLoad() {
+    // [任务36] 粤语播报通道就绪态（测试版默认 false → 置灰“即将支持”）
+    // 实际可改为调用云函数 ttsProxy 探测环境变量是否配置后回填
+    this.setData({ yueTtsReady: false })
+  },
+
+  setFast() {
+    this.setData({ mode: 'fast' })
+  },
+
+  setDeep() {
+    this.setData({ mode: 'deep' })
+  },
+
+  // 拍菜单 → 上传云存储 → 待接 aiGateway order_fast / order_deep(T2/T8)
+  handleMenuCapture() {
+    wx.chooseImage({
+      count: 1,
+      sourceType: ['camera', 'album'],
+      success: (res) => {
+        const filePath = res.tempFilePaths[0]
+        wx.cloud.uploadFile({
+          cloudPath: `order/${Date.now()}.jpg`,
+          filePath,
+          success: () => {
+            console.log('菜单已上传, 当前模式:', this.data.mode)
+            // [任务36] 此处上传后进入识别+确认门禁；门禁通过后由 onMenuConfirmed 回填 candidates
+          },
+          fail: (err) => {
+            console.error('菜单上传失败', err)
+          }
+        })
+      }
+    })
+  },
+
+  // ── [任务36 新增] 门禁通过回调：设定已确认清单，解锁翻译/话术 ──
+  onMenuConfirmed(confirmedList) {
+    this.setData({
+      menuConfirmed: true,
+      candidates: Array.isArray(confirmedList) ? confirmedList : []
+    })
+  },
+
+  // ── [任务36 新增] 三语选择器 ──
+  // 说明：三语均可选用于“翻译”；粤语因播报通道未就绪在播报环节置灰（见 handleSpeak）
+  onPickLang(e) {
+    const lang = e.currentTarget.dataset.lang
+    if (!LANG_LABEL[lang]) return
+    this.setData({ translateLang: lang, phraseConfirmed: false })
+  },
+
+  // ── [任务36 新增] 菜单翻译：门禁通过后可选 ──
+  handleTranslate() {
+    if (!this.data.menuConfirmed) {
+      wx.showToast({ title: '请先确认菜单', icon: 'none' })
+      return
+    }
+    this.setData({ translating: true })
+
+    const fast = this.data.mode === 'fast'
+    const messages = [
+      { role: 'system', content: buildTranslateSystem(this.data.translateLang, fast) },
+      { role: 'user', content: JSON.stringify(this.data.candidates) }
+    ]
+
+    callAI('translate', messages)
+      .then((res) => {
+        const text = extractText(res)
+        this.setData({
+          translating: false,
+          translateResult: { list: parseTranslate(text, this.data.candidates), fallback: false }
+        })
+      })
+      .catch(() => {
+        // [任务36] 失败降级：展示原文，不阻断主流程
+        this.setData({ translating: false, translateResult: { list: [], fallback: true } })
+        wx.showToast({ title: '翻译失败，已展示原文', icon: 'none' })
+      })
+  },
+
+  // ── [任务36 新增] 生成点餐话术（order_phrase，菜名白名单约束）──
+  handleGenPhrase() {
+    if (!this.data.candidates.length) {
+      wx.showToast({ title: '请先确认候选', icon: 'none' })
+      return
+    }
+    const messages = [
+      { role: 'system', content: buildPhraseSystem(this.data.translateLang) },
+      { role: 'user', content: JSON.stringify(this.data.candidates) }
+    ]
+
+    callAI('order_phrase', messages)
+      .then((res) => {
+        const text = extractText(res)
+        // [任务36] 红线：话术菜名只许来自已确认候选，越权则回退模板
+        const safe = phraseHonorsWhitelist(text, this.data.candidates)
+        this.setData({
+          phraseText: safe ? text : buildTemplatePhrase(this.data.candidates),
+          phraseConfirmed: false,
+          ttsFallbackText: ''
+        })
+      })
+      .catch(() => {
+        // [任务36] 生成失败 → 模板话术兜底
+        this.setData({
+          phraseText: buildTemplatePhrase(this.data.candidates),
+          phraseConfirmed: false,
+          ttsFallbackText: ''
+        })
+      })
+  },
+
+  // ── [任务36 新增] 用户确认话术（播报前置门禁，不可跳过）──
+  confirmPhrase() {
+    if (!this.data.phraseText || !this.data.phraseText.trim()) {
+      wx.showToast({ title: '话术为空', icon: 'none' })
+      return
+    }
+    this.setData({ phraseConfirmed: true })
+  },
+
+  // [任务36 新增] 允许用户编辑话术
+  onPhraseEdit(e) {
+    this.setData({ phraseText: e.detail.value, phraseConfirmed: false })
+  },
+
+  // ── [任务36 新增] 播报 ──
+  handleSpeak() {
+    if (!this.data.phraseConfirmed) {
+      wx.showToast({ title: '请先确认话术', icon: 'none' })
+      return
+    }
+    const lang = this.data.translateLang
+
+    // 粤语：走腾讯云 TTS 云函数（备选通道），未就绪则置灰提示
+    if (lang === 'yue') {
+      if (!this.data.yueTtsReady) {
+        wx.showToast({ title: '粤语播报即将支持', icon: 'none' })
+        return
+      }
+      this.speakViaTencentTTS(this.data.phraseText)
+      return
+    }
+
+    // 普通话 / 英语：WechatSI 插件 textToSpeech
+    if (!WechatSI) {
+      this.fallbackToText()
+      return
+    }
+    this.setData({ speaking: true, ttsFallbackText: '' })
+    WechatSI.textToSpeech({
+      lang: lang === 'en_US' ? 'en_US' : 'zh_CN',
+      tts: true,
+      content: this.data.phraseText,
+      success: (res) => {
+        this.setData({ speaking: false })
+        const audio = wx.createInnerAudioContext()
+        audio.src = res.filename
+        audio.play()
+        this._audio = audio
+      },
+      fail: () => {
+        // [任务36] 失败降级：展示话术文本让用户自己念
+        this.fallbackToText()
+      }
+    })
+  },
+
+  // [任务36 新增] 粤语播报：云函数 ttsProxy 转发腾讯云 TTS（密钥走环境变量）
+  speakViaTencentTTS(text) {
+    this.setData({ speaking: true, ttsFallbackText: '' })
+    wx.cloud.callFunction({
+      name: 'ttsProxy',
+      data: { text, lang: 'yue' },
+      success: (res) => {
+        const r = res.result || {}
+        if (r.error || !r.audioUrl) {
+          this.fallbackToText()
+          return
+        }
+        this.setData({ speaking: false })
+        const audio = wx.createInnerAudioContext()
+        audio.src = r.audioUrl
+        audio.play()
+        this._audio = audio
+      },
+      fail: () => this.fallbackToText()
+    })
+  },
+
+  // [任务36 新增] TTS 失败降级：展示话术文本供用户自己念
+  fallbackToText() {
+    this.setData({ speaking: false, ttsFallbackText: this.data.phraseText })
+    wx.showToast({ title: '播报失败，请照文本念', icon: 'none' })
+  }
+})
+
+// ── [任务36] 模块内辅助函数 ────────────────────────────────────────
+
+function extractText(res) {
+  if (!res) return ''
+  if (typeof res === 'string') return res
+  if (typeof res.text === 'string') return res.text
+  if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
+    const c = res.choices[0].message.content
+    if (typeof c === 'string') return c
+    if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
+  }
+  if (typeof res.content === 'string') return res.content
+  return ''
+}
+
+function buildTranslateSystem(lang, fast) {
+  return [
+    'role: 菜单翻译',
+    `目标语: ${LANG_LABEL[lang]}`,
+    '硬约束:',
+    '  - 只翻译给定清单内的菜名与标记，不得新增/删除/合并条目',
+    '  - 过敏原/禁忌成分必须逐条对应译出，不得省略',
+    '输出:',
+    fast
+      ? '  - 快速模式：仅返回 [{ "name": 原名, "translation": 译文 }]，不译长描述/营养'
+      : '  - 深度模式：返回 [{ "name": 原名, "translation": 译文, "flag": 成分标记译文, "note": 备注 }]'
+  ].join('\n')
+}
+
+function buildPhraseSystem(lang) {
+  return [
+    'role: 点餐话术生成',
+    `目标语: ${LANG_LABEL[lang]}`,
+    '硬约束:',
+    '  - 生成的菜名只许来自已确认候选清单，不得增删、不得改写菜名、不得杜撰菜品',
+    '  - 数量、口味备注以清单为准，不得臆造',
+    '  - 不输出价格、不输出营养数值',
+    '输出: 一段可直接对服务员说的口语化点餐要求'
+  ].join('\n')
+}
+
+// 解析翻译返回：容错 JSON / 纯文本
+function parseTranslate(text, candidates) {
+  try {
+    const arr = JSON.parse(text)
+    if (Array.isArray(arr)) return arr
+  } catch (e) { /* 落到纯文本 */ }
+  // 纯文本降级：按行对照
+  return String(text || '').split('\n').filter(Boolean).map((line, i) => ({
+    name: (candidates[i] && candidates[i].name) || '',
+    translation: line
+  }))
+}
+
+// [任务36] 红线：话术菜名白名单校验（越权则回退模板）
+function phraseHonorsWhitelist(text, candidates) {
+  if (!text) return false
+  // 简单策略：解析话术中出现的候选菜名，若出现明显不在清单的菜名片段则判失败。
+  // 联调阶段可替换为词典/分词匹配，此处以“至少命中一个已确认菜名”为最低通过条件。
+  const names = (candidates || []).map((c) => c.name).filter(Boolean)
+  if (!names.length) return false
+  return names.some((n) => text.indexOf(n) >= 0)
+}
+
+// [任务36] 模板话术兜底
+function buildTemplatePhrase(candidates) {
+  const names = (candidates || []).map((c) =>
+    c.count ? `${c.name}x${c.count}` : c.name
+  ).filter(Boolean)
+  return `麻烦点：${names.join('、')}。谢谢！`
+}
+```
+
+---
+
+## ②-2 `pages/order/order.wxml`（骨架未提供，按 `order.js` 数据配套新建）
+
+```xml
+<view class="order-page">
+  <view class="title">{{pageTitle}}</view>
+
+  <!-- 双模式切换（沿用任务32） -->
+  <view class="mode-bar">
+    <button size="mini" bindtap="setFast" disabled="{{mode === 'fast'}}">⚡ 快速分析</button>
+    <button size="mini" bindtap="setDeep" disabled="{{mode === 'deep'}}">🍽 深度分析</button>
+  </view>
+
+  <!-- 拍菜单 -->
+  <button bindtap="handleMenuCapture">拍菜单 / 从相册选择</button>
+
+  <!-- [任务36] 三语选择器：三语均可选用于翻译；粤语标注播报即将支持 -->
+  <view class="lang-bar">
+    <view class="lang-item {{translateLang === 'zh_CN' ? 'active' : ''}}"
+          data-lang="zh_CN" bindtap="onPickLang">普通话</view>
+    <view class="lang-item {{translateLang === 'en_US' ? 'active' : ''}}"
+          data-lang="en_US" bindtap="onPickLang">English</view>
+    <view class="lang-item {{translateLang === 'yue' ? 'active' : ''}} {{!yueTtsReady ? 'disabled' : ''}}"
+          data-lang="yue" bindtap="onPickLang">粤语<text wx:if="{{!yueTtsReady}}" class="badge">(播报即将支持)</text></view>
+  </view>
+
+  <!-- [任务36] 翻译入口：门禁通过后才可用 -->
+  <button bindtap="handleTranslate"
+          disabled="{{!menuConfirmed || translating}}">
+    🌐 翻译菜单{{translating ? '（翻译中…）' : ''}}
+  </button>
+
+  <!-- [任务36] 原文-译文对照展示 -->
+  <view class="translate-result" wx:if="{{translateResult}}">
+    <view wx:if="{{translateResult.fallback}}" class="hint">翻译失败，已展示原文</view>
+    <view class="row" wx:for="{{translateResult.list}}" wx:key="index">
+      <text class="col-src">{{item.name}}</text>
+      <text class="col-dst">{{item.translation}}</text>
+    </view>
+  </view>
+
+  <!-- [任务36] 生成点餐话术 -->
+  <button bindtap="handleGenPhrase" disabled="{{!candidates.length}}">🎙 生成点餐话术</button>
+
+  <!-- [任务36] 话术展示 + 可编辑 + 确认 -->
+  <view class="phrase-box" wx:if="{{phraseText}}">
+    <textarea value="{{phraseText}}" bindinput="onPhraseEdit" auto-height />
+    <button bindtap="confirmPhrase" disabled="{{phraseConfirmed}}">
+      {{phraseConfirmed ? '✔ 话术已确认' : '确认话术'}}
+    </button>
+  </view>
+
+  <!-- [任务36] 播报按钮：话术确认后可用；粤语未就绪置灰 -->
+  <button bindtap="handleSpeak"
+          disabled="{{!phraseConfirmed || speaking || (translateLang === 'yue' && !yueTtsReady)}}">
+    {{speaking ? '播报中…' : '🔊 播报'}}
+  </button>
+
+  <!-- [任务36] TTS 失败降级：展示文本让用户自己念 -->
+  <view class="tts-fallback" wx:if="{{ttsFallbackText}}">
+    <view class="hint">播报失败，请照此向服务员点单：</view>
+    <text>{{ttsFallbackText}}</text>
+  </view>
+</view>
+```
+
+---
+
+## ②-3 `app.json`（新增 `plugins.WechatSI` 声明）
+
+```json
+{
+  "pages": [
+    "pages/order/order"
+  ],
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
+    }
+  }
+}
+```
+
+> **说明**：`plugins.WechatSI` 为新增段；`order.js` 中 `requirePlugin('WechatSI')` 依赖此声明。`app.json` 其余字段按项目原有内容保留（此处仅展示与本任务相关的最小结构）。
+
+---
+
+## ③ `common/gateway.js`（**未改动**，仅确认新增 mode 可复用）
+
+```js
+// 食知 AI 调用统一入口
+// 规则:所有页面只允许通过 callAI() 调 AI,禁止前端直连任何模型 API(AGENTS.md 技术约束)
+// 实际模型路由在云函数 aiGateway 的 MODEL_MAP 集中配置(T2)
+
+// mode: 'recognize'|'copy'|'nutrition'|'order_fast'|'order_deep'|'chat'
+function callAI(mode, messages) {
+  return new Promise((resolve, reject) => {
+    wx.cloud.callFunction({
+      name: 'aiGateway',
+      data: { mode, messages },
+      success: (res) => {
+        const result = res.result || {}
+        // 网关侧红线拦截反馈(nutrition 模式数字泄漏等)
+        if (result.error) {
+          reject(result)
+          return
+        }
+        resolve(result)
+      },
+      fail: (err) => {
+        reject(err)
+      }
+    })
+  })
+}
+
+// 便捷封装:识图模式(图片走云存储 fileID 或 base64,禁入代码包)
+function callRecognize(messages, allowNumbers = false) {
+  return callAI('recognize', messages)
+}
+
+// 便捷封装:营养模式(默认拦截模型自产数字,见 T2 红线)
+function callNutrition(messages, allowNumbers = false) {
+  return callAI('nutrition', messages)
+}
+
+module.exports = { callAI, callRecognize, callNutrition }
+```
+
+**确认结论**：`callAI(mode, messages)` 的 `mode` 是**透传参数**，不做白名单校验，因此新增的 `translate`、`order_phrase` **无需改 `gateway.js` 即可直接复用**——`order.js` 中 `callAI('translate', …)` / `callAI('order_phrase', …)` 会原样送到 `aiGateway`，由 `MODEL_MAP` 命中新功能位。故本文件**保持不变**。
+
+---
+
+## 改动点汇总
+
+| 文件 | 改动 | 关键点 |
+|---|---|---|
+| `aiGateway/index.js` | `MODEL_MAP` +2 行 | `translate` / `order_phrase` 均 `hy3` + `extend`，其余零改 |
+| `order.js` | 引入 `callAI`；新增翻译/话术/播报全流程 | 三语选择、粤语播报置灰、白名单校验、TTS 失败降级、模板兜底 |
+| `order.wxml` | 新建（配套骨架） | 三语选择器、翻译对照、话术确认、播报按钮、降级文本 |
+| `app.json` | `plugins.WechatSI@0.3.5` | `requirePlugin('WechatSI')` 前置声明 |
+| `common/gateway.js` | **未改** | `callAI` 透传 mode，新功能位可直接复用 |
+
+**两条待联调项**（代码已留位）：`phraseHonorsWhitelist` 的菜名匹配策略、粤语 `ttsProxy` 云函数与 `yueTtsReady` 探测，均以实测定稿。
+

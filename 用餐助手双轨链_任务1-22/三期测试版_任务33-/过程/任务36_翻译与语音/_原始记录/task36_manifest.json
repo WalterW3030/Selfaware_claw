@@ -1,0 +1,27 @@
+[
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/二期设计_任务23-29/点餐助手双模式增补_任务32.md",
+  "bytes": 13274,
+  "sha256": "e201459d7a7074325ea8a8a79159788c8badd8f76968fa4b0aaacc46b7666e18"
+ },
+ {
+  "path": "<substitute:Kimi 17:04 intent>",
+  "bytes": 829,
+  "sha256": "401c4f768579f3998bed09c7ef83ceed9886e544ea6f934374d2a996bc4a1f06"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务34_原生工程与网关/cloudfunctions/aiGateway/index.js",
+  "bytes": 5619,
+  "sha256": "ef7140d33b10532992df732fd273ee33aa78e13584a7810bf51e173f643359af"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务34_原生工程与网关/pages/order/order.js",
+  "bytes": 777,
+  "sha256": "ed4f8a7eece97c4c07b3064476231d63a6aa265b471a17623cb0770e53b47b04"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务34_原生工程与网关/common/gateway.js",
+  "bytes": 1188,
+  "sha256": "d6144189d4f7df2ff8fa62f03edb3d208abf6241cfbd85892d2ce17ad3d7aea3"
+ }
+]

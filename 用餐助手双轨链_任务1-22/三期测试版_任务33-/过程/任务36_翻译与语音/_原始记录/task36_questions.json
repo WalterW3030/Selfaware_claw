@@ -1,0 +1,4 @@
+[
+ "为点餐助手新增菜单翻译与语音点单双功能，产出设计文档。要求：\n①菜单翻译——触发时机（菜单识别确认门禁通过后可选）、三语选项（普通话/粤语/英语）、翻译走aiGateway新增mode=translate用hy3、结果与原文对照展示；\n②语音点单——流程为\"最终候选确认→AI生成点餐话术（新增mode=order_phrase用hy3，prompt约束菜名只许来自已确认候选不得增删）→用户确认话术→TTS播报\"；\n③播报通道=WechatSI插件（普通话/英语）+腾讯云TTS粤语备选通道（云函数转发，密钥环境变量，测试版可置灰标注即将支持）；\n④与快速/深度双模式的关系（两模式都可翻译可播报，翻译在快速模式下默认只译菜名清单）；\n⑤失败降级（TTS失败→展示话术文本让用户自己念）。\n输出《点餐助手翻译与语音增补_任务36.md》。",
+ "基于context里的三个文件原文（cloudfunctions/aiGateway/index.js、pages/order/order.js、common/gateway.js）产出修改版：\n①aiGateway/index.js的MODEL_MAP新增translate与order_phrase两个mode（都hy3，extend通道），其余不动；\n②pages/order/order.js+order.wxml：菜单确认后加\"翻译\"按钮+三语选择器（粤语播报选项置灰标注即将支持）、候选确认后加\"生成点餐话术\"按钮→话术展示+确认→\"播报\"按钮（WechatSI插件调用textToSpeech，lang按选择，tts=true，InnerAudioContext播放，失败降级展示文本），插件声明（app.json加plugins.WechatSI版本0.3.5）也给出；\n③common/gateway.js不变只确认新mode可复用callAI。\n输出修改后完整文件，标注改动点。"
+]

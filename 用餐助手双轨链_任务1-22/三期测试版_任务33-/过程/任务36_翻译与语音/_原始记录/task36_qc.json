@@ -1,0 +1,177 @@
+[
+ {
+  "item": "文件齐套(设计文档+index.js+order.js+order.wxml+app.json+gateway.js)",
+  "pass": true,
+  "detail": "['app.json', 'cloudfunctions/aiGateway/index.js', 'common/gateway.js', 'pages/order/order.js', 'pages/order/order.wxml', '点餐助手翻译与语音增补_任务36.md']"
+ },
+ {
+  "item": "MODEL_MAP新增translate=hy3",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP新增order_phrase=hy3",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:recognize",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:copy",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:nutrition",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:order_fast",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:order_deep",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有mode保留:chat",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "extend姿势未破坏",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "selfhost通道保留",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[textToSpeech]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[InnerAudioContext]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[order_phrase]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[translate]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[requirePlugin]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.js含[[任务36]]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.wxml含[[任务36]]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "order.wxml含[粤语]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "粤语置灰/即将支持标注",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "app.json plugins.WechatSI=0.3.5(provider=官方appid)",
+  "pass": true,
+  "detail": "{'version': '0.3.5', 'provider': 'wx069ba97219f66d99'}"
+ },
+ {
+  "item": "app.json五路由+cloud保留(合并后)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "gateway.js与任务34版逐字一致(未改动声明属实)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[translate]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[order_phrase]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[WechatSI]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[粤语]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[普通话]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[英语]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[hy3]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[降级]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[快速]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[深度]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档含[置灰]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "设计文档注明插件版本0.3.5(信息项)",
+  "pass": false,
+  "detail": "文档未写版本号，版本以app.json为准（信息项，不阻断）"
+ }
+]

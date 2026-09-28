@@ -1,0 +1,37 @@
+[
+ {
+  "path": "<executor_declaration>",
+  "bytes": 468,
+  "sha256": "1d3ae60faccd1ae348f9d6ccbe76250b0020e325be0f4284de77d1ff8159047a"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/结论/推荐系统结构设计与UI执行方案.md",
+  "bytes": 5818,
+  "sha256": "15d80bb883d02e8f317e0c89f1f9832f5c7f32fd5d4bc55baccef04c86a155f8"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/推荐系统_卡与prompt_v2/详细推荐执行卡_079.md",
+  "bytes": 5417,
+  "sha256": "04605670a609231482fa6d2ff67ea9fcf6001346c761e745228f5375abc92748"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/推荐系统_卡与prompt_v2/快速推荐执行卡_080.md",
+  "bytes": 4123,
+  "sha256": "b2adf8e39db59e5f3473d393f42b4538f823bdf7a52512e613a2e0d0d845b750"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/推荐系统_卡与prompt_v2/初始化prompt_081.md",
+  "bytes": 5317,
+  "sha256": "855709eacae4c63626bf74b098d817ce8503103b227b851e18e09feba5380d9d"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/推荐系统_卡与prompt_v2/project_instruction_v2.md",
+  "bytes": 2483,
+  "sha256": "bbdf99406fa2f58dbd92c56cc43cf5b55579988f593eaa0b5c25c9b6fe432b4f"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务34_原生工程与网关/cloudfunctions/aiGateway/index.js",
+  "bytes": 5619,
+  "sha256": "ef7140d33b10532992df732fd273ee33aa78e13584a7810bf51e173f643359af"
+ }
+]

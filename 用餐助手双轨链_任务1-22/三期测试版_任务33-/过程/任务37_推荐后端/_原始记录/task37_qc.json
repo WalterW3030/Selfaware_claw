@@ -1,0 +1,182 @@
+[
+ {
+  "item": "文件齐套(recommend.js+index.js+initDb+importRefTables)",
+  "pass": true,
+  "detail": "['cloudfunctions/aiGateway/index.js', 'cloudfunctions/importRefTables/index.js', 'cloudfunctions/initDb/index.js', 'common/recommend.js']"
+ },
+ {
+  "item": "recommend.js含[mealSession]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[prompt_assets]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[ref_tables]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[dish_summary]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[079]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[080]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[快速]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[过敏原]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[loadTables]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[loadPrompt]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js含[version]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js不硬编码prompt全文（按版本号从DB读）",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP新增recommend_fast(thinking low)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "MODEL_MAP新增recommend_deep(thinking medium)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend_deep注释注明可上探high",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:recognize",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:copy",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:nutrition",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:order_fast",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:order_deep",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原有功能位保留:chat",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "原6功能位取值逐字不动（copy/nutrition无thinking字段按原文比对；唯一触碰=chat行尾逗号，语法必需）",
+  "pass": true,
+  "detail": "opcodes非equal=['insert', 'insert', 'replace']，新增/replace行=10；六位取值全同=True；new_modes=['chat', 'copy', 'nutrition', 'order_deep', 'order_fast', 'recognize', 'recommend_deep', 'recommend_fast']"
+ },
+ {
+  "item": "extend姿势未破坏",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "selfhost通道保留",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "initDb建集合[ref_tables]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "initDb建集合[dish_summary]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "initDb含安全规则(只读/仅云函数写)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables含[ref_tables]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables含[downloadFile]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables含[md]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables缺失如实报缺不编造",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "common/recommend.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/aiGateway/index.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/initDb/index.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/importRefTables/index.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ }
+]

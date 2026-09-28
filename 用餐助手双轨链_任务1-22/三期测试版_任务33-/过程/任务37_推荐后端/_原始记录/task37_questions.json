@@ -1,0 +1,4 @@
+[
+ "产出 common/recommend.js 完整代码：\n①mealSession会话状态机（新建/场景判定/需求收集/候选装载/推荐中/两段输出/确认入库/关闭；新餐=新会话默认独立，仅显式声明才延续并记录）；\n②prompt装配器（初始化prompt081+当次卡+ref_tables按需拉取+候选清单含成分摘要与数值负荷+用户输入，按\"将查的表\"声明拉取）；\n③卡选择逻辑（默认079，仅用户输入显式含\"快速\"才080）；\n④无支持项查证的二次独立调用编排（同mode新开消息不携带初稿）；\n⑤双保险：候选进装配前先调规则层硬过滤（过敏原/忌口/重选），与agent结果不一致以规则层为准并记录。\n禁止硬编码prompt全文，prompt按版本号从DB读。",
+ "基于context里 aiGateway/index.js 原文产出修改版，并新增两个脚本：\n①aiGateway/index.js的MODEL_MAP新增recommend_fast（deepseek-flash思考low）与recommend_deep（deepseek-flash思考medium，注释注明可上探high），原八位不动；\n②DB建表脚本：新集合ref_tables（表号/版本/内容/生效标记）与dish_summary（菜品/成分与效应摘要/数值负荷/生成时间/模型版本），含安全规则（ref_tables全员只读仅云函数写，dish_summary同）；\n③速查表导入脚本（从云存储md文件解析入ref_tables，表文件缺失时导入器如实报缺不编造）。\n输出修改后完整文件与两个新脚本，标注改动点。"
+]

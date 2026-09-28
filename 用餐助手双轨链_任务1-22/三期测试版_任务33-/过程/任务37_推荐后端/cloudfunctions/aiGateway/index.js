@@ -7,22 +7,24 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const ai = cloud.ai()
 
 // ── 功能位配置（严格按《第一部分总结报告》§四 定稿表）──────────────
-// mode: recognize | copy | nutrition | order_fast | order_deep | chat
-//       + recommend_fast | recommend_deep        ← 【改动点1】新增两位
+// mode: recognize | copy | nutrition | order_fast | order_deep | chat | translate | order_phrase
+//       + recommend_fast | recommend_deep            ← 【任务37】新增两位（推荐系统）
 // channel: 'extend'（默认托管通道）
 // 备选：为某功能位切 selfhost，把该行 channel 改 'selfhost' 并配 model，
 //       同时确保环境变量 SELFHOST_BASE_URL / SELFHOST_API_KEY 已配（见 callSelfhost 守卫）。
 // thinking: 'off' | 'low' | 'medium'（无该字段=不传思考参数；selfhost 通道忽略此字段）
 const MODEL_MAP = {
-  // ── 原有六位：一字不动 ──────────────────────────────────────
   recognize:  { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
   copy:       { channel: 'extend', model: 'hy3'                              },
   nutrition:  { channel: 'extend', model: 'hy3'                              },
   order_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
   order_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium'  },
   chat:       { channel: 'extend', model: 'deepseek-flash', thinking: 'low'     },
+  // ── [任务36] 新增两个功能位：菜单翻译 / 点餐话术生成，均走 hy3、extend 通道 ──
+  translate:    { channel: 'extend', model: 'hy3'                              },
+  order_phrase: { channel: 'extend', model: 'hy3'                              },
 
-  // ── 【改动点1】新增：推荐两位（对齐 common/recommend.js 的 cardToMode 映射）──
+  // ── 【任务37】新增：推荐两位（对齐 common/recommend.js 的 cardToMode 映射）──
   // 快速卡080 → recommend_fast：思考 low（推理任务禁 off，见详细卡079/快速卡080）
   recommend_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'low' },
   // 详细卡079 → recommend_deep：默认思考 medium；复杂个案可上探 'high'
@@ -130,6 +132,9 @@ exports.main = async (event) => {
       }
     }
   }
+
+  // [任务36] 说明：translate / order_phrase 走默认分支透传，不触发数字泄漏红线
+  // （order_phrase 的价格/营养“不输出”由前端 prompt 约束 + 前端白名单校验承担，见 order.js）
 
   return res
 }

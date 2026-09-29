@@ -1,0 +1,17 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <view wx:elif="{{records.length === 0}}" class="empty">
+    <text>暂无记录</text>
+  </view>
+
+  <view wx:else class="list">
+    <view class="record-item" wx:for="{{records}}" wx:key="mealId">
+      <view class="record-scene">{{item.scene || '一餐'}}</view>
+      <view class="record-reqs">{{item.userRequirements}}</view>
+      <view class="record-results">{{item.results}}</view>
+    </view>
+  </view>
+</view>

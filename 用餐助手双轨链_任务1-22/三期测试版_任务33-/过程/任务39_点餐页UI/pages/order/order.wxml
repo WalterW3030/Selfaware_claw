@@ -1,0 +1,190 @@
+<view class="order-page">
+  <view class="title">{{pageTitle}}</view>
+
+  <!-- 顶部：新的一餐（进页即新会话） -->
+  <view class="top-bar">
+    <button size="mini" bindtap="onNewMeal">新的一餐</button>
+  </view>
+
+  <!-- ==================== 屏1：选单栏 + 输入行 ==================== -->
+  <block wx:if="{{screen === 1}}">
+
+    <!-- 选单栏：默认 [餐:午餐▾] + 常用标签chip×3 + [+] -->
+    <view class="menu-bar">
+      <picker mode="selector" range="{{mealOptions}}" value="{{mealIndex}}" bindchange="onMealChange">
+        <view class="meal-picker">餐:{{meal}}▾</view>
+      </picker>
+
+      <view class="chip-inline" wx:for="{{topTags}}" wx:key="key"
+            data-key="{{item.key}}" bindtap="onTapTag">{{item.name}}</view>
+
+      <view class="plus-btn" bindtap="togglePlusPanel">+</view>
+    </view>
+
+    <!-- [+]面板 -->
+    <view class="plus-panel" wx:if="{{showPlusPanel}}">
+
+      <!-- 更多标签（全部13个，平铺不分区） -->
+      <view class="panel-section">
+        <view class="panel-title">更多标签</view>
+        <view class="tag-grid">
+          <view class="tag-item" wx:for="{{allTags}}" wx:key="key"
+                data-key="{{item.key}}" bindtap="onTapTagInPanel">{{item.name}}</view>
+        </view>
+      </view>
+
+      <!-- 分量控件：四类各0-3，一餐合计≤3 -->
+      <view class="panel-section">
+        <view class="panel-title">分量（一餐合计≤3道，当前{{portionTotal}}道）</view>
+        <view class="portion-row" wx:for="{{portionTypes}}" wx:key="key">
+          <text class="portion-name">{{item.name}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="-1" bindtap="onPortionChange">-</button>
+          <text class="portion-val">{{portions[item.key]}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="1" bindtap="onPortionChange">+</button>
+        </view>
+      </view>
+
+      <!-- 预算控件：人均0-200 步进10 -->
+      <view class="panel-section">
+        <view class="panel-title">预算：人均{{budget}}元以内</view>
+        <slider min="{{budgetMin}}" max="{{budgetMax}}" step="{{budgetStep}}"
+                value="{{budget}}" bindchange="onBudgetChange" show-value />
+      </view>
+
+      <!-- 忌口管理入口 -->
+      <view class="panel-section">
+        <button size="mini" bindtap="openDietPanel">忌口管理</button>
+      </view>
+
+      <!-- 快速/详细切换（默认快速） -->
+      <view class="panel-section">
+        <view class="panel-title">分析模式</view>
+        <button size="mini" bindtap="setFast" disabled="{{mode === 'fast'}}">⚡ 快速</button>
+        <button size="mini" bindtap="setDeep" disabled="{{mode === 'deep'}}">🍽 详细</button>
+      </view>
+
+      <!-- 语言选择 -->
+      <view class="panel-section">
+        <view class="panel-title">语言</view>
+        <view class="lang-bar">
+          <view class="lang-item {{translateLang === 'zh_CN' ? 'active' : ''}}"
+                data-lang="zh_CN" bindtap="onPickLang">普通话</view>
+          <view class="lang-item {{translateLang === 'en_US' ? 'active' : ''}}"
+                data-lang="en_US" bindtap="onPickLang">English</view>
+          <view class="lang-item {{translateLang === 'yue' ? 'active' : ''}} {{!yueTtsReady ? 'disabled' : ''}}"
+                data-lang="yue" bindtap="onPickLang">粤语<text wx:if="{{!yueTtsReady}}" class="badge">(播报即将支持)</text></view>
+        </view>
+      </view>
+
+      <!-- 加菜/已有食物输入 -->
+      <view class="panel-section">
+        <view class="panel-title">加菜 / 已有食物</view>
+        <input class="extra-input" value="{{extraInput}}" bindinput="onExtraInput"
+               placeholder="如：已有一份米饭" />
+        <button size="mini" bindtap="onConfirmExtra">添加</button>
+      </view>
+
+    </view>
+
+    <!-- 输入栏：可删除小块（只显标签名/值） -->
+    <view class="chip-box" wx:if="{{chips.length}}">
+      <view class="chip" wx:for="{{chips}}" wx:key="id">
+        <text class="chip-label">{{item.label}}</text>
+        <text class="chip-del" data-id="{{item.id}}" bindtap="onRemoveChip">×</text>
+      </view>
+    </view>
+
+    <!-- 自由输入框 -->
+    <view class="input-row">
+      <input class="user-input" value="{{userInput}}" bindinput="onUserInput"
+             placeholder="补充要求（可选）" />
+      <button class="send-btn" bindtap="onSend" disabled="{{loading}}">
+        {{loading ? '推荐中…' : '发送'}}
+      </button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 屏2：推荐结果卡片 ==================== -->
+  <block wx:if="{{screen === 2}}">
+
+    <!-- 停摆态：兜底文案 + 兜底结果 -->
+    <view class="stall-box" wx:if="{{stalled}}">
+      <text class="stall-text">{{stallText}}</text>
+    </view>
+
+    <view class="result-list">
+      <view class="result-card" wx:for="{{resultCards}}" wx:key="rank">
+        <text class="rc-rank">{{item.rank}}</text>
+        <text class="rc-name">{{item.name}}</text>
+        <text class="rc-score">{{item.score}}</text>
+        <text class="rc-reason">{{item.reason}}</text>
+        <text class="rc-badge" data-badge="{{item.badge}}" bindtap="onTapBadge">{{item.badge}}</text>
+      </view>
+    </view>
+
+    <button class="expand-btn" bindtap="onExpandAnalysis">展开完整分析</button>
+
+  </block>
+
+  <!-- ==================== 屏3：完整分析四段 ==================== -->
+  <block wx:if="{{screen === 3}}">
+
+    <view class="analysis">
+      <view class="seg">
+        <view class="seg-title">需求清单</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.requirements}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">匹配结果</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.matches}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">参数记录</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.params}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">局限声明</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.limits}}" wx:key="index">{{item}}</view>
+      </view>
+    </view>
+
+    <view class="analysis-actions">
+      <button bindtap="onConfirmAdd">确认加入本餐</button>
+      <button bindtap="onRescreen">重新筛选</button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 角标说明弹层（固定三句） ==================== -->
+  <view class="modal-mask" wx:if="{{showBadgeExplain}}" bindtap="closeBadgeExplain">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-text">{{badgeExplain}}</text>
+      <button size="mini" bindtap="closeBadgeExplain">关闭</button>
+    </view>
+  </view>
+
+  <!-- ==================== 忌口弹层（15项 + 手输） ==================== -->
+  <view class="modal-mask" wx:if="{{showDietPanel}}" bindtap="closeDietPanel">
+    <view class="modal-box diet-box" catchtap="noop">
+      <view class="modal-title">忌口管理</view>
+      <view class="diet-list">
+        <view class="diet-item" wx:for="{{dietList}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="onToggleDiet">
+          <text class="diet-check">{{dietProfile[item.key] ? '☑' : '☐'}}</text>
+          <text class="diet-name">{{item.name}}</text>
+        </view>
+      </view>
+      <view class="diet-custom">
+        <input class="diet-input" value="{{dietCustom}}" bindinput="onDietCustomInput"
+               placeholder="手输补充忌口" />
+        <button size="mini" bindtap="onAddDietCustom">添加</button>
+      </view>
+      <button size="mini" bindtap="closeDietPanel">完成</button>
+    </view>
+  </view>
+
+</view>

@@ -12,25 +12,27 @@ const ai = cloud.ai()
 // channel: 'extend'（默认托管通道）
 // 备选：为某功能位切 selfhost，把该行 channel 改 'selfhost' 并配 model，
 //       同时确保环境变量 SELFHOST_BASE_URL / SELFHOST_API_KEY 已配（见 callSelfhost 守卫）。
-// thinking: 'off' | 'low' | 'medium'（无该字段=不传思考参数；selfhost 通道忽略此字段）
+// thinking（原档位说明）：'off' | 'low' | 'medium'
+// 【任务40，2026-09-29】cloudbase通道不支持thinking参数，思考档位仅selfhost通道生效。
+// 各功能位原 thinking 档保留为行内注释说明（设计意图档位），调用时一律不下发。
 const MODEL_MAP = {
-  recognize:  { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
+  recognize:  { channel: 'extend', model: 'deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
   copy:       { channel: 'extend', model: 'hy3'                              },
   nutrition:  { channel: 'extend', model: 'hy3'                              },
-  order_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'off'     },
-  order_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium'  },
-  chat:       { channel: 'extend', model: 'deepseek-flash', thinking: 'low'     },
+  order_fast: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
+  order_deep: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ },
+  chat:       { channel: 'extend', model: 'deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
   // ── [任务36] 新增两个功能位：菜单翻译 / 点餐话术生成，均走 hy3、extend 通道 ──
   translate:    { channel: 'extend', model: 'hy3'                              },
   order_phrase: { channel: 'extend', model: 'hy3'                              },
 
   // ── 【任务37】新增：推荐两位（对齐 common/recommend.js 的 cardToMode 映射）──
-  // 快速卡080 → recommend_fast：思考 low（推理任务禁 off，见详细卡079/快速卡080）
-  recommend_fast: { channel: 'extend', model: 'deepseek-flash', thinking: 'low' },
-  // 详细卡079 → recommend_deep：默认思考 medium；复杂个案可上探 'high'
-  //   （上探方式：将该行 thinking 临时改 'high'，或调用侧显式覆盖；
+  // 快速卡080 → recommend_fast：设计意图 low（推理任务禁 off，见详细卡079/快速卡080）
+  recommend_fast: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
+  // 详细卡079 → recommend_deep：默认设计意图 medium；复杂个案可上探 'high'
+  //   （上探方式：将该行 thinking 临时改 'high' 并恢复下发逻辑，或调用侧显式覆盖；
   //    常规个案保持 medium，勿默认上探以控成本）
-  recommend_deep: { channel: 'extend', model: 'deepseek-flash', thinking: 'medium' }
+  recommend_deep: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ }
 }
 
 // ── 思考档位 → API 字段映射 ────────────────────────────────────────
@@ -50,8 +52,12 @@ function selfhostReady() {
 async function callExtend(cfg, messages) {
   const model = ai.createModel('cloudbase')
   const data = { model: cfg.model, messages }
-  const thinking = buildThinking(cfg.thinking)
-  if (thinking) data.thinking = thinking
+  // 【任务40，2026-09-29】cloudbase通道不支持thinking参数，思考档位仅selfhost通道生效。
+  // 以下两行原 thinking 注入已注释：往 generateText 的 data 里塞 thinking 字段
+  // 会被 CloudBase 模型接口拒绝（云端实测 mode=chat 返回 400；429 阶段已验证
+  // 路由到模型本身正常，400 与模型名无关）。buildThinking 保留备用。
+  // const thinking = buildThinking(cfg.thinking)
+  // if (thinking) data.thinking = thinking
   return model.generateText({ data })
 }
 

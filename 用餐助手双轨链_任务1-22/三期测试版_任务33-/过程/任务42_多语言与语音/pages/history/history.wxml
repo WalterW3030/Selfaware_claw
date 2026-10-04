@@ -1,0 +1,18 @@
+<!-- [任务42-第3轮] 历史页显示文字走 langPack -->
+<view class="page">
+  <text class="page-title">{{langPack['history.pageTitle']}}</text>
+
+  <view wx:if="{{loading}}" class="hint">{{langPack['common.loading']}}</view>
+
+  <view wx:elif="{{records.length === 0}}" class="empty">
+    <text>{{langPack['history.empty']}}</text>
+  </view>
+
+  <view wx:else class="list">
+    <view class="record-item" wx:for="{{records}}" wx:key="mealId">
+      <view class="record-scene">{{item.scene || langPack['history.mealDefaultScene']}}</view>
+      <view class="record-reqs">{{item.userRequirements}}</view>
+      <view class="record-results">{{item.results}}</view>
+    </view>
+  </view>
+</view>

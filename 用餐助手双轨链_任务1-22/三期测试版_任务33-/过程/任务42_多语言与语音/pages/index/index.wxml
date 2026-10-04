@@ -1,0 +1,34 @@
+<!-- [任务42-第3轮] 首页显示文字走 langPack -->
+<view class="page">
+  <text class="page-title">{{langPack['index.pageTitle']}}</text>
+
+  <view class="new-meal-bar">
+    <button bindtap="startNewMeal">{{langPack['order.newMeal']}}</button>
+  </view>
+
+  <view class="primary-action">
+    <button bindtap="handleCapture">{{langPack['index.capture']}}</button>
+  </view>
+
+  <view class="templates">
+    <button bindtap="goResult" data-mode="recognize">{{langPack['index.template.recognize']}}</button>
+    <button bindtap="goResult" data-mode="copy">{{langPack['index.template.copy']}}</button>
+    <button bindtap="goResult" data-mode="nutrition">{{langPack['index.template.nutrition']}}</button>
+  </view>
+
+  <view class="recent-meals">
+    <view class="section-title">{{langPack['index.recentMeals']}}</view>
+    <view wx:if="{{recentMeals.length === 0}}" class="empty">{{langPack['index.recentEmpty']}}</view>
+    <view wx:else class="meal-list">
+      <view class="meal-item" wx:for="{{recentMeals}}" wx:key="mealId"
+            data-id="{{item.mealId}}" bindtap="goMealDetail">
+        <text class="meal-scene">{{item.scene || langPack['index.mealDefaultScene']}}</text>
+        <text class="meal-reqs">{{item.userRequirements}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="chat-entry">
+    <text bindtap="goResult" data-mode="chat">{{langPack['index.chatEntry']}}</text>
+  </view>
+</view>

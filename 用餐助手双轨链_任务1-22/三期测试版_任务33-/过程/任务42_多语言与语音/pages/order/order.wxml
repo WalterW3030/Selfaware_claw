@@ -1,0 +1,213 @@
+<!-- [任务42-第2轮] order页接入i18n与语音：全部显示文字走 langPack；语言按钮[简▾]循环切换；麦克风按住说话；播报按钮启用；音色占位弹层 -->
+<view class="order-page">
+  <view class="title">{{langPack['order.pageTitle']}}</view>
+
+  <!-- 顶部：新的一餐 + 语言按钮[简▾] -->
+  <view class="top-bar">
+    <button size="mini" bindtap="onNewMeal">{{langPack['order.newMeal']}}</button>
+    <view class="lang-btn" bindtap="onTapLangBtn">{{langBtnText}}▾</view>
+  </view>
+
+  <!-- ==================== 屏1：选单栏 + 输入行 ==================== -->
+  <block wx:if="{{screen === 1}}">
+
+    <!-- 选单栏 -->
+    <view class="menu-bar">
+      <picker mode="selector" range="{{mealOptions}}" value="{{mealIndex}}" bindchange="onMealChange">
+        <view class="meal-picker">{{langPack['order.menuBar.mealPrefix']}}{{meal}}▾</view>
+      </picker>
+
+      <view class="chip-inline" wx:for="{{topTags}}" wx:key="key"
+            data-key="{{item.key}}" bindtap="onTapTag">{{item.name}}</view>
+
+      <view class="plus-btn" bindtap="togglePlusPanel">{{langPack['order.menuBar.plus']}}</view>
+    </view>
+
+    <!-- [+]面板 -->
+    <view class="plus-panel" wx:if="{{showPlusPanel}}">
+
+      <!-- 更多标签 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.moreTags']}}</view>
+        <view class="tag-grid">
+          <view class="tag-item" wx:for="{{allTags}}" wx:key="key"
+                data-key="{{item.key}}" bindtap="onTapTagInPanel">{{item.name}}</view>
+        </view>
+      </view>
+
+      <!-- 分量控件 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.portionTitle']}}</view>
+        <view class="portion-row" wx:for="{{portionTypes}}" wx:key="key">
+          <text class="portion-name">{{langPack[item.i18nKey]}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="-1" bindtap="onPortionChange">-</button>
+          <text class="portion-val">{{portions[item.key]}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="1" bindtap="onPortionChange">+</button>
+        </view>
+      </view>
+
+      <!-- 预算控件 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.budgetTitle']}}</view>
+        <slider min="{{budgetMin}}" max="{{budgetMax}}" step="{{budgetStep}}"
+                value="{{budget}}" bindchange="onBudgetChange" show-value />
+      </view>
+
+      <!-- 忌口管理入口 -->
+      <view class="panel-section">
+        <button size="mini" bindtap="openDietPanel">{{langPack['order.panel.dietEntry']}}</button>
+      </view>
+
+      <!-- 快速/详细切换 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.modeTitle']}}</view>
+        <button size="mini" bindtap="setFast" disabled="{{mode === 'fast'}}">{{langPack['order.panel.modeFast']}}</button>
+        <button size="mini" bindtap="setDeep" disabled="{{mode === 'deep'}}">{{langPack['order.panel.modeDeep']}}</button>
+      </view>
+
+      <!-- 语言选择（旧入口保留） -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.langTitle']}}</view>
+        <view class="lang-bar">
+          <view class="lang-item {{translateLang === 'zh_CN' ? 'active' : ''}}"
+                data-lang="zh_CN" bindtap="onPickLang">{{langPack['order.lang.zhHans']}}</view>
+          <view class="lang-item {{translateLang === 'en_US' ? 'active' : ''}}"
+                data-lang="en_US" bindtap="onPickLang">{{langPack['order.lang.en']}}</view>
+          <view class="lang-item {{translateLang === 'yue' ? 'active' : ''}}"
+                data-lang="yue" bindtap="onPickLang">{{langPack['order.lang.yue']}}</view>
+        </view>
+      </view>
+
+      <!-- 加菜/已有食物输入 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.extraTitle']}}</view>
+        <input class="extra-input" value="{{extraInput}}" bindinput="onExtraInput"
+               placeholder="{{langPack['order.panel.extraPlaceholder']}}" />
+        <button size="mini" bindtap="onConfirmExtra">{{langPack['common.add']}}</button>
+      </view>
+
+    </view>
+
+    <!-- 输入栏：可删除小块 -->
+    <view class="chip-box" wx:if="{{chips.length}}">
+      <view class="chip" wx:for="{{chips}}" wx:key="id">
+        <text class="chip-label">{{item.label}}</text>
+        <text class="chip-del" data-id="{{item.id}}" bindtap="onRemoveChip">×</text>
+      </view>
+    </view>
+
+    <!-- 自由输入框 + 麦克风 + 发送 -->
+    <view class="input-row">
+      <view class="mic-btn {{recording ? 'recording' : ''}}"
+            bindtouchstart="onMicStart" bindtouchend="onMicEnd">🎤</view>
+      <input class="user-input" value="{{userInput}}" bindinput="onUserInput"
+             placeholder="{{langPack['order.input.placeholder']}}" />
+      <button class="send-btn" bindtap="onSend" disabled="{{loading}}">
+        {{loading ? langPack['order.input.sending'] : langPack['common.send']}}
+      </button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 屏2：推荐结果卡片 ==================== -->
+  <block wx:if="{{screen === 2}}">
+
+    <view class="stall-box" wx:if="{{stalled}}">
+      <text class="stall-text">{{langPack['order.stall.text']}}</text>
+    </view>
+
+    <view class="result-list">
+      <view class="result-card" wx:for="{{resultCards}}" wx:key="rank">
+        <text class="rc-rank">{{item.rank}}</text>
+        <text class="rc-name">{{item.name}}</text>
+        <text class="rc-score">{{item.score}}</text>
+        <text class="rc-reason">{{item.reason}}</text>
+        <text class="rc-badge" data-badge="{{item.badge}}" bindtap="onTapBadge">{{item.badge}}</text>
+      </view>
+    </view>
+
+    <view class="result-actions">
+      <button class="expand-btn" bindtap="onExpandAnalysis">{{langPack['order.result.expand']}}</button>
+      <button class="speak-btn" bindtap="handleSpeak" disabled="{{speaking}}">🔊</button>
+      <button class="voice-btn" bindtap="openVoicePanel">音色</button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 屏3：完整分析四段 ==================== -->
+  <block wx:if="{{screen === 3}}">
+
+    <view class="analysis">
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.requirements']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.requirements}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.matches']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.matches}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.params']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.params}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.limits']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.limits}}" wx:key="index">{{item}}</view>
+      </view>
+    </view>
+
+    <view class="analysis-actions">
+      <button bindtap="onConfirmAdd">{{langPack['order.analysis.confirmAdd']}}</button>
+      <button bindtap="onRescreen">{{langPack['order.analysis.rescreen']}}</button>
+      <button class="speak-btn" bindtap="handleSpeak" disabled="{{speaking}}">🔊</button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 角标说明弹层 ==================== -->
+  <view class="modal-mask" wx:if="{{showBadgeExplain}}" bindtap="closeBadgeExplain">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-text">{{badgeExplain}}</text>
+      <button size="mini" bindtap="closeBadgeExplain">{{langPack['common.close']}}</button>
+    </view>
+  </view>
+
+  <!-- ==================== 忌口弹层 ==================== -->
+  <view class="modal-mask" wx:if="{{showDietPanel}}" bindtap="closeDietPanel">
+    <view class="modal-box diet-box" catchtap="noop">
+      <view class="modal-title">{{langPack['order.dietPanel.title']}}</view>
+      <view class="diet-list">
+        <view class="diet-item" wx:for="{{dietList}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="onToggleDiet">
+          <text class="diet-check">{{dietProfile[item.key] ? '☑' : '☐'}}</text>
+          <text class="diet-name">{{item.name}}</text>
+        </view>
+      </view>
+      <view class="diet-custom">
+        <input class="diet-input" value="{{dietCustom}}" bindinput="onDietCustomInput"
+               placeholder="{{langPack['order.dietPanel.customPlaceholder']}}" />
+        <button size="mini" bindtap="onAddDietCustom">{{langPack['common.add']}}</button>
+      </view>
+      <button size="mini" bindtap="closeDietPanel">{{langPack['common.done']}}</button>
+    </view>
+  </view>
+
+  <!-- ==================== 音色选择窗（占位，仅"默认音色"） ==================== -->
+  <view class="modal-mask" wx:if="{{showVoicePanel}}" bindtap="closeVoicePanel">
+    <view class="modal-box voice-box" catchtap="noop">
+      <view class="modal-title">音色选择</view>
+      <view class="voice-list">
+        <view class="voice-item active" wx:for="{{voiceOptions}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="onTapVoiceOption">
+          <text class="voice-radio">◉</text>
+          <text class="voice-name">{{item.name}}</text>
+        </view>
+      </view>
+      <button size="mini" bindtap="closeVoicePanel">{{langPack['common.close']}}</button>
+    </view>
+  </view>
+
+</view>

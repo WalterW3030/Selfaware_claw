@@ -1,0 +1,29 @@
+[
+ {
+  "call": 1,
+  "thinking": "disabled",
+  "wall_clock_s": 29.304,
+  "finish_reason": "stop",
+  "reasoning_tokens": null,
+  "completion_tokens": 10446,
+  "content_len": 24260
+ },
+ {
+  "call": 2,
+  "thinking": "disabled",
+  "wall_clock_s": 39.81,
+  "finish_reason": "stop",
+  "reasoning_tokens": null,
+  "completion_tokens": 15173,
+  "content_len": 48384
+ },
+ {
+  "call": 3,
+  "thinking": "disabled",
+  "wall_clock_s": 15.401,
+  "finish_reason": "stop",
+  "reasoning_tokens": null,
+  "completion_tokens": 4876,
+  "content_len": 14055
+ }
+]

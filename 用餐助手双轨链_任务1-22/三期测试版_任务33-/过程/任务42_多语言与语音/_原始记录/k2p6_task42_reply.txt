@@ -1,0 +1,3140 @@
+===== Cycle 1 | outcome=direct handoff=False =====
+// FILE: utils/i18n.js
+// [任务42-第1轮] i18n 基建：语言包注册 / 当前语言读取 / 切换持久化 / 语言变更事件广播
+// 依据：《多语言与语音方案.md》v1.0 三.1；不引入新AI模型，纯前端 i18n。
+// 语言键：zh-Hans（简体）/ zh-Hant（繁体）/ en（英文）
+// 说明：本文件只做基建，不改任何页面文件。
+
+const LOCALES = {
+  'zh-Hans': require('../locale/zh-Hans.js'),
+  'zh-Hant': require('../locale/zh-Hant.js'),
+  'en': require('../locale/en.js')
+}
+
+const LANG_LIST = ['zh-Hans', 'zh-Hant', 'en']
+const DEFAULT_LANG = 'zh-Hans'
+const LS_LANG_KEY = 'app_lang'
+
+// 语言变更事件名（全局广播）
+const EVT_LANG_CHANGED = 'app_lang_changed'
+
+// 订阅者集合：页面 onLoad 订阅、onUnload 退订
+let _subscribers = []
+
+// 当前语言（内存缓存，初值从 storage 读）
+let _currentLang = null
+
+function _readStorageLang() {
+  try {
+    const v = wx.getStorageSync(LS_LANG_KEY)
+    if (v && LANG_LIST.indexOf(v) >= 0) return v
+  } catch (e) { /* 忽略 */ }
+  return null
+}
+
+function _writeStorageLang(lang) {
+  try {
+    wx.setStorageSync(LS_LANG_KEY, lang)
+  } catch (e) { /* 忽略 */ }
+}
+
+// 归一化：接受 'zh_CN' / 'zh-Hans' / 'zh-Hant' / 'en' / 'en_US' / 'yue' 等写法
+function normalizeLang(lang) {
+  if (!lang) return DEFAULT_LANG
+  const s = String(lang)
+  if (s === 'zh-Hans' || s === 'zh_CN' || s === 'zh-CN' || s === 'zhHans') return 'zh-Hans'
+  if (s === 'zh-Hant' || s === 'zh_HK' || s === 'zh-TW' || s === 'zhHant' || s === 'yue') return 'zh-Hant'
+  if (s === 'en' || s === 'en_US' || s === 'en-US') return 'en'
+  return DEFAULT_LANG
+}
+
+// 取当前语言
+function getLang() {
+  if (!_currentLang) {
+    _currentLang = _readStorageLang() || DEFAULT_LANG
+  }
+  return _currentLang
+}
+
+// 取当前语言包（对象，key → 文案）
+function getLangPack(lang) {
+  const l = normalizeLang(lang || getLang())
+  return LOCALES[l] || LOCALES[DEFAULT_LANG]
+}
+
+// 取某个 key 的文案（带兜底：缺失时回退简体包，再缺失回退 key 本身）
+function t(key, lang) {
+  const pack = getLangPack(lang)
+  if (pack && Object.prototype.hasOwnProperty.call(pack, key)) return pack[key]
+  const fallback = LOCALES[DEFAULT_LANG]
+  if (fallback && Object.prototype.hasOwnProperty.call(fallback, key)) return fallback[key]
+  return key
+}
+
+// 切换语言：写 storage + 广播（所有订阅页面自动刷新）
+function setLang(lang) {
+  const next = normalizeLang(lang)
+  if (next === getLang()) return next
+  _currentLang = next
+  _writeStorageLang(next)
+  _broadcast(next)
+  return next
+}
+
+// 订阅语言变更（返回退订函数）
+function subscribeLangChange(fn) {
+  if (typeof fn !== 'function') return function () {}
+  _subscribers.push(fn)
+  return function unsubscribe() {
+    _subscribers = _subscribers.filter((f) => f !== fn)
+  }
+}
+
+// 广播语言变更
+function _broadcast(lang) {
+  const pack = getLangPack(lang)
+  _subscribers.slice().forEach((fn) => {
+    try {
+      fn(lang, pack)
+    } catch (e) {
+      console.warn('i18n 订阅回调异常', e)
+    }
+  })
+}
+
+// 语言显示名（用于"我的"页/选单栏语言项）
+const LANG_DISPLAY = {
+  'zh-Hans': '简体',
+  'zh-Hant': '繁體',
+  'en': 'English'
+}
+
+module.exports = {
+  LANG_LIST,
+  DEFAULT_LANG,
+  LS_LANG_KEY,
+  EVT_LANG_CHANGED,
+  LANG_DISPLAY,
+  normalizeLang,
+  getLang,
+  getLangPack,
+  t,
+  setLang,
+  subscribeLangChange
+}
+
+// FILE: utils/i18nBehavior.js
+// [任务42-第1轮] i18n 页面混入 Behavior：onLoad 注入 data.langPack + 订阅语言变更自动 setData
+// 依据：《多语言与语音方案.md》v1.0 三.1（Behavior 混入）
+// 用法：Page({ behaviors: [require('../../utils/i18nBehavior.js')], ... })
+
+const i18n = require('./i18n.js')
+
+module.exports = Behavior({
+  data: {
+    langPack: {},
+    lang: i18n.DEFAULT_LANG
+  },
+
+  lifetimes: {
+    attached() {
+      // 注入当前语言包
+      const lang = i18n.getLang()
+      this.setData({
+        lang,
+        langPack: i18n.getLangPack(lang)
+      })
+
+      // 订阅语言变更，自动刷新本页 langPack
+      this._i18nUnsubscribe = i18n.subscribeLangChange((nextLang, pack) => {
+        this.setData({
+          lang: nextLang,
+          langPack: pack
+        })
+      })
+    },
+
+    detached() {
+      if (typeof this._i18nUnsubscribe === 'function') {
+        this._i18nUnsubscribe()
+        this._i18nUnsubscribe = null
+      }
+    }
+  },
+
+  methods: {
+    // 页面内切换语言（可选调用）
+    i18nSetLang(lang) {
+      i18n.setLang(lang)
+    },
+
+    // 取当前语言
+    i18nGetLang() {
+      return i18n.getLang()
+    }
+  }
+})
+
+// FILE: locale/zh-Hans.js
+// [任务42-第1轮] 简体语言包（基准包，key 权威来源）
+// 抽取范围：任务39 pages/order、pages/index、pages/history 三页全部界面显示文字
+// 含：选单栏 / 标签面板13项 / 分量4类 / 预算 / 忌口15项 / 输入栏 / 屏2卡片(含角标✓/?/⚠固定三句) / 屏3 / 停摆兜底文案 / 首页 / 历史页
+// key 对齐要求：zh-Hant、en 两包必须与本包 key 完全一致。
+
+module.exports = {
+  // ── 通用 ──
+  'common.confirm': '确认',
+  'common.cancel': '取消',
+  'common.close': '关闭',
+  'common.add': '添加',
+  'common.done': '完成',
+  'common.loading': '加载中…',
+  'common.empty': '暂无记录',
+  'common.send': '发送',
+  'common.retry': '重试',
+
+  // ── 点餐页 order：标题 / 顶部 ──
+  'order.pageTitle': '点餐助手',
+  'order.newMeal': '新的一餐',
+  'order.newMealToast': '已开启新的一餐',
+
+  // ── 选单栏（规格 §二）──
+  'order.menuBar.mealPrefix': '餐:',
+  'order.menuBar.plus': '+',
+
+  // ── 餐切换选项（规格 §二）──
+  'order.meal.breakfast': '早餐',
+  'order.meal.lunch': '午餐',
+  'order.meal.dinner': '晚餐',
+  'order.meal.lateNight': '夜宵',
+  'order.meal.afternoonTea': '下午茶',
+
+  // ── [+] 面板 ──
+  'order.panel.moreTags': '更多标签',
+  'order.panel.portionTitle': '分量（一餐合计≤3道，当前{count}道）',
+  'order.panel.portionLimitToast': '一餐合计最多3道',
+  'order.panel.budgetTitle': '预算：人均{amount}元以内',
+  'order.panel.dietEntry': '忌口管理',
+  'order.panel.modeTitle': '分析模式',
+  'order.panel.modeFast': '⚡ 快速',
+  'order.panel.modeDeep': '🍽 详细',
+  'order.panel.langTitle': '语言',
+  'order.panel.extraTitle': '加菜 / 已有食物',
+  'order.panel.extraPlaceholder': '如：已有一份米饭',
+
+  // ── 13项标签名（规格 §一，逐字）──
+  'order.tag.sport_recover': '运动后补充',
+  'order.tag.body_recover': '身体恢复',
+  'order.tag.group_dining': '多人聚餐',
+  'order.tag.drink': '小酌',
+  'order.tag.spicy': '吃辣',
+  'order.tag.no_spicy': '无辣',
+  'order.tag.light': '清淡',
+  'order.tag.appetite': '开胃',
+  'order.tag.less_oil_sugar': '少油少糖',
+  'order.tag.fat_loss': '减脂控卡',
+  'order.tag.muscle_gain': '健身增肌',
+  'order.tag.cool_down': '解暑',
+  'order.tag.warm_stomach': '暖胃',
+
+  // ── 分量四类（规格 §三）──
+  'order.portion.staple': '主食',
+  'order.portion.main': '主菜',
+  'order.portion.snack': '小吃',
+  'order.portion.drink': '饮料',
+
+  // ── 忌口15项（规格 §五，逐字）──
+  'order.diet.no_spicy_diet': '不吃辣',
+  'order.diet.no_cilantro': '不吃香菜',
+  'order.diet.no_garlic': '不吃葱蒜',
+  'order.diet.halal': '清真（忌猪肉酒精）',
+  'order.diet.lactose': '乳糖不耐',
+  'order.diet.seafood': '海鲜过敏',
+  'order.diet.peanut_nut': '花生坚果过敏',
+  'order.diet.gluten': '麸质过敏',
+  'order.diet.egg': '鸡蛋过敏',
+  'order.diet.soy': '大豆过敏',
+  'order.diet.vegetarian': '素食（蛋奶素/纯素）',
+  'order.diet.sugar_control': '控糖',
+  'order.diet.salt_control': '限盐',
+  'order.diet.low_purine': '低嘌呤（痛风）',
+  'order.diet.pregnancy': '孕产妇禁忌',
+
+  // ── 忌口弹层 ──
+  'order.dietPanel.title': '忌口管理',
+  'order.dietPanel.customPlaceholder': '手输补充忌口',
+  'order.dietPanel.addedToast': '已添加',
+
+  // ── 输入栏 ──
+  'order.input.placeholder': '补充要求（可选）',
+  'order.input.needSelectToast': '请先选择或输入',
+  'order.input.alreadyTagToast': '已选该标签',
+  'order.input.sending': '推荐中…',
+
+  // ── 语言项显示名 ──
+  'order.lang.zhHans': '普通话',
+  'order.lang.en': 'English',
+  'order.lang.yue': '粤语',
+  'order.lang.yueBadge': '(播报即将支持)',
+
+  // ── 屏2 推荐结果卡片 ──
+  'order.result.expand': '展开完整分析',
+
+  // ── 角标固定三句说明（逐字，Coordinator 2026-09-29 14:49:23 指令）──
+  'order.badge.real': '来自真实资料',
+  'order.badge.inferred': '结果基于真实资料推断，注意甄别',
+  'order.badge.ai': '结果主要来自ai生成信息，注意甄别',
+
+  // ── 停摆态兜底文案（逐字）──
+  'order.stall.text': '这类情况我还没学会，先用简单推荐',
+  'order.stall.fallbackReason': '简单推荐',
+  'order.stall.noResult': '暂无推荐',
+  'order.stall.retryHint': '请补充信息后重试',
+
+  // ── 屏3 完整分析四段 ──
+  'order.analysis.requirements': '需求清单',
+  'order.analysis.matches': '匹配结果',
+  'order.analysis.params': '参数记录',
+  'order.analysis.limits': '局限声明',
+  'order.analysis.confirmAdd': '确认加入本餐',
+  'order.analysis.rescreen': '重新筛选',
+  'order.analysis.addedToast': '已加入本餐',
+
+  // ── 屏3 参数记录条目 ──
+  'order.param.meal': '餐次：{meal}',
+  'order.param.mode': '模式：{mode}',
+  'order.param.modeFast': '快速',
+  'order.param.modeDeep': '详细',
+  'order.param.budget': '预算：人均{amount}以内',
+  'order.param.diet': '忌口：{diet}',
+  'order.param.dietNone': '无',
+
+  // ── 屏3 局限声明（正常态）──
+  'order.limit.normal': '推荐结果基于当前候选清单与速查表，具体以实际菜单为准；成分与禁忌请以门店标注为准。',
+
+  // ── 输入栏小块前缀（拼接用）──
+  'order.chip.extraPrefix': '已有：',
+  'order.chip.portionPrefix': '点{count}道：',
+  'order.chip.budgetPrefix': '预算：人均{amount}以内',
+
+  // ── 首页 index ──
+  'index.pageTitle': '食知',
+  'index.capture': '拍照识别',
+  'index.template.recognize': '识图',
+  'index.template.copy': '文案',
+  'index.template.nutrition': '营养分析',
+  'index.recentMeals': '最近餐次',
+  'index.recentEmpty': '暂无记录',
+  'index.mealDefaultScene': '一餐',
+  'index.chatEntry': '自由提问',
+
+  // ── 历史页 history ──
+  'history.pageTitle': '历史记录',
+  'history.empty': '暂无记录',
+  'history.mealDefaultScene': '一餐'
+}
+
+// FILE: locale/zh-Hant.js
+// [任务42-第1轮] 繁体语言包（按简体包逐条转写，key 与 zh-Hans 完全对齐）
+// 转换方式：OpenCC s2t 常用字/词级转换 + 人工校对用词（香港/台湾习惯）
+// 说明：本包 key 必须与 locale/zh-Hans.js 一一对应，不得增删 key。
+
+module.exports = {
+  // ── 通用 ──
+  'common.confirm': '確認',
+  'common.cancel': '取消',
+  'common.close': '關閉',
+  'common.add': '添加',
+  'common.done': '完成',
+  'common.loading': '載入中…',
+  'common.empty': '暫無記錄',
+  'common.send': '發送',
+  'common.retry': '重試',
+
+  // ── 點餐頁 order：標題 / 頂部 ──
+  'order.pageTitle': '點餐助手',
+  'order.newMeal': '新的一餐',
+  'order.newMealToast': '已開啟新的一餐',
+
+  // ── 選單欄（規格 §二）──
+  'order.menuBar.mealPrefix': '餐:',
+  'order.menuBar.plus': '+',
+
+  // ── 餐切換選項（規格 §二）──
+  'order.meal.breakfast': '早餐',
+  'order.meal.lunch': '午餐',
+  'order.meal.dinner': '晚餐',
+  'order.meal.lateNight': '夜宵',
+  'order.meal.afternoonTea': '下午茶',
+
+  // ── [+] 面板 ──
+  'order.panel.moreTags': '更多標籤',
+  'order.panel.portionTitle': '分量（一餐合計≤3道，當前{count}道）',
+  'order.panel.portionLimitToast': '一餐合計最多3道',
+  'order.panel.budgetTitle': '預算：人均{amount}元以內',
+  'order.panel.dietEntry': '忌口管理',
+  'order.panel.modeTitle': '分析模式',
+  'order.panel.modeFast': '⚡ 快速',
+  'order.panel.modeDeep': '🍽 詳細',
+  'order.panel.langTitle': '語言',
+  'order.panel.extraTitle': '加菜 / 已有食物',
+  'order.panel.extraPlaceholder': '如：已有一份米飯',
+
+  // ── 13項標籤名（規格 §一，逐字）──
+  'order.tag.sport_recover': '運動後補充',
+  'order.tag.body_recover': '身體恢復',
+  'order.tag.group_dining': '多人聚餐',
+  'order.tag.drink': '小酌',
+  'order.tag.spicy': '吃辣',
+  'order.tag.no_spicy': '無辣',
+  'order.tag.light': '清淡',
+  'order.tag.appetite': '開胃',
+  'order.tag.less_oil_sugar': '少油少糖',
+  'order.tag.fat_loss': '減脂控卡',
+  'order.tag.muscle_gain': '健身增肌',
+  'order.tag.cool_down': '解暑',
+  'order.tag.warm_stomach': '暖胃',
+
+  // ── 分量四類（規格 §三）──
+  'order.portion.staple': '主食',
+  'order.portion.main': '主菜',
+  'order.portion.snack': '小吃',
+  'order.portion.drink': '飲料',
+
+  // ── 忌口15項（規格 §五，逐字）──
+  'order.diet.no_spicy_diet': '不吃辣',
+  'order.diet.no_cilantro': '不吃香菜',
+  'order.diet.no_garlic': '不吃蔥蒜',
+  'order.diet.halal': '清真（忌豬肉酒精）',
+  'order.diet.lactose': '乳糖不耐',
+  'order.diet.seafood': '海鮮過敏',
+  'order.diet.peanut_nut': '花生堅果過敏',
+  'order.diet.gluten': '麩質過敏',
+  'order.diet.egg': '雞蛋過敏',
+  'order.diet.soy': '大豆過敏',
+  'order.diet.vegetarian': '素食（蛋奶素/純素）',
+  'order.diet.sugar_control': '控糖',
+  'order.diet.salt_control': '限鹽',
+  'order.diet.low_purine': '低嘌呤（痛風）',
+  'order.diet.pregnancy': '孕產婦禁忌',
+
+  // ── 忌口彈層 ──
+  'order.dietPanel.title': '忌口管理',
+  'order.dietPanel.customPlaceholder': '手輸補充忌口',
+  'order.dietPanel.addedToast': '已添加',
+
+  // ── 輸入欄 ──
+  'order.input.placeholder': '補充要求（可選）',
+  'order.input.needSelectToast': '請先選擇或輸入',
+  'order.input.alreadyTagToast': '已選該標籤',
+  'order.input.sending': '推薦中…',
+
+  // ── 語言項顯示名 ──
+  'order.lang.zhHans': '普通話',
+  'order.lang.en': 'English',
+  'order.lang.yue': '粵語',
+  'order.lang.yueBadge': '(播報即將支持)',
+
+  // ── 屏2 推薦結果卡片 ──
+  'order.result.expand': '展開完整分析',
+
+  // ── 角標固定三句說明（逐字）──
+  'order.badge.real': '來自真實資料',
+  'order.badge.inferred': '結果基於真實資料推斷，注意甄別',
+  'order.badge.ai': '結果主要來自ai生成資訊，注意甄別',
+
+  // ── 停擺態兜底文案（逐字）──
+  'order.stall.text': '這類情況我還沒學會，先用簡單推薦',
+  'order.stall.fallbackReason': '簡單推薦',
+  'order.stall.noResult': '暫無推薦',
+  'order.stall.retryHint': '請補充資訊後重試',
+
+  // ── 屏3 完整分析四段 ──
+  'order.analysis.requirements': '需求清單',
+  'order.analysis.matches': '匹配結果',
+  'order.analysis.params': '參數記錄',
+  'order.analysis.limits': '局限聲明',
+  'order.analysis.confirmAdd': '確認加入本餐',
+  'order.analysis.rescreen': '重新篩選',
+  'order.analysis.addedToast': '已加入本餐',
+
+  // ── 屏3 參數記錄條目 ──
+  'order.param.meal': '餐次：{meal}',
+  'order.param.mode': '模式：{mode}',
+  'order.param.modeFast': '快速',
+  'order.param.modeDeep': '詳細',
+  'order.param.budget': '預算：人均{amount}以內',
+  'order.param.diet': '忌口：{diet}',
+  'order.param.dietNone': '無',
+
+  // ── 屏3 局限聲明（正常態）──
+  'order.limit.normal': '推薦結果基於當前候選清單與速查表，具體以實際菜單為準；成分與禁忌請以門店標註為準。',
+
+  // ── 輸入欄小塊前綴（拼接用）──
+  'order.chip.extraPrefix': '已有：',
+  'order.chip.portionPrefix': '點{count}道：',
+  'order.chip.budgetPrefix': '預算：人均{amount}以內',
+
+  // ── 首頁 index ──
+  'index.pageTitle': '食知',
+  'index.capture': '拍照識別',
+  'index.template.recognize': '識圖',
+  'index.template.copy': '文案',
+  'index.template.nutrition': '營養分析',
+  'index.recentMeals': '最近餐次',
+  'index.recentEmpty': '暫無記錄',
+  'index.mealDefaultScene': '一餐',
+  'index.chatEntry': '自由提問',
+
+  // ── 歷史頁 history ──
+  'history.pageTitle': '歷史記錄',
+  'history.empty': '暫無記錄',
+  'history.mealDefaultScene': '一餐'
+}
+
+// FILE: locale/en.js
+// [任务42-第1轮] 英文语言包（按简体包逐条翻译，key 与 zh-Hans 完全对齐）
+// 说明：本包 key 必须与 locale/zh-Hans.js 一一对应，不得增删 key。
+// 界面文案量少（约百条），人工翻译。
+
+module.exports = {
+  // ── 通用 ──
+  'common.confirm': 'Confirm',
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.add': 'Add',
+  'common.done': 'Done',
+  'common.loading': 'Loading…',
+  'common.empty': 'No records',
+  'common.send': 'Send',
+  'common.retry': 'Retry',
+
+  // ── 点餐页 order：标题 / 顶部 ──
+  'order.pageTitle': 'Order Assistant',
+  'order.newMeal': 'New Meal',
+  'order.newMealToast': 'New meal started',
+
+  // ── 选单栏（规格 §二）──
+  'order.menuBar.mealPrefix': 'Meal:',
+  'order.menuBar.plus': '+',
+
+  // ── 餐切换选项（规格 §二）──
+  'order.meal.breakfast': 'Breakfast',
+  'order.meal.lunch': 'Lunch',
+  'order.meal.dinner': 'Dinner',
+  'order.meal.lateNight': 'Late Night',
+  'order.meal.afternoonTea': 'Afternoon Tea',
+
+  // ── [+] 面板 ──
+  'order.panel.moreTags': 'More Tags',
+  'order.panel.portionTitle': 'Portions (max 3 per meal, current {count})',
+  'order.panel.portionLimitToast': 'Up to 3 dishes per meal',
+  'order.panel.budgetTitle': 'Budget: within ¥{amount} per person',
+  'order.panel.dietEntry': 'Dietary Restrictions',
+  'order.panel.modeTitle': 'Analysis Mode',
+  'order.panel.modeFast': '⚡ Fast',
+  'order.panel.modeDeep': '🍽 Detailed',
+  'order.panel.langTitle': 'Language',
+  'order.panel.extraTitle': 'Add Dish / Existing Food',
+  'order.panel.extraPlaceholder': 'e.g. Already have a bowl of rice',
+
+  // ── 13项标签名（规格 §一，逐字）──
+  'order.tag.sport_recover': 'Post-workout',
+  'order.tag.body_recover': 'Recovery',
+  'order.tag.group_dining': 'Group Dining',
+  'order.tag.drink': 'Drinks',
+  'order.tag.spicy': 'Spicy',
+  'order.tag.no_spicy': 'No Spicy',
+  'order.tag.light': 'Light',
+  'order.tag.appetite': 'Appetizing',
+  'order.tag.less_oil_sugar': 'Less Oil & Sugar',
+  'order.tag.fat_loss': 'Fat Loss',
+  'order.tag.muscle_gain': 'Muscle Gain',
+  'order.tag.cool_down': 'Cooling',
+  'order.tag.warm_stomach': 'Warming',
+
+  // ── 分量四类（规格 §三）──
+  'order.portion.staple': 'Staple',
+  'order.portion.main': 'Main',
+  'order.portion.snack': 'Snack',
+  'order.portion.drink': 'Drink',
+
+  // ── 忌口15项（规格 §五，逐字）──
+  'order.diet.no_spicy_diet': 'No Spicy',
+  'order.diet.no_cilantro': 'No Cilantro',
+  'order.diet.no_garlic': 'No Scallion/Garlic',
+  'order.diet.halal': 'Halal (no pork/alcohol)',
+  'order.diet.lactose': 'Lactose Intolerant',
+  'order.diet.seafood': 'Seafood Allergy',
+  'order.diet.peanut_nut': 'Peanut/Nut Allergy',
+  'order.diet.gluten': 'Gluten Allergy',
+  'order.diet.egg': 'Egg Allergy',
+  'order.diet.soy': 'Soy Allergy',
+  'order.diet.vegetarian': 'Vegetarian (lacto-ovo/vegan)',
+  'order.diet.sugar_control': 'Sugar Control',
+  'order.diet.salt_control': 'Low Sodium',
+  'order.diet.low_purine': 'Low Purine (Gout)',
+  'order.diet.pregnancy': 'Pregnancy Restrictions',
+
+  // ── 忌口弹层 ──
+  'order.dietPanel.title': 'Dietary Restrictions',
+  'order.dietPanel.customPlaceholder': 'Enter other restrictions',
+  'order.dietPanel.addedToast': 'Added',
+
+  // ── 输入栏 ──
+  'order.input.placeholder': 'Additional requests (optional)',
+  'order.input.needSelectToast': 'Please select or type something',
+  'order.input.alreadyTagToast': 'Tag already selected',
+  'order.input.sending': 'Recommending…',
+
+  // ── 语言项显示名 ──
+  'order.lang.zhHans': 'Mandarin',
+  'order.lang.en': 'English',
+  'order.lang.yue': 'Cantonese',
+  'order.lang.yueBadge': '(Voice coming soon)',
+
+  // ── 屏2 推荐结果卡片 ──
+  'order.result.expand': 'View Full Analysis',
+
+  // ── 角标固定三句说明（逐字）──
+  'order.badge.real': 'From real sources',
+  'order.badge.inferred': 'Inferred from real sources, please verify',
+  'order.badge.ai': 'Mainly AI-generated, please verify',
+
+  // ── 停摆态兜底文案（逐字）──
+  'order.stall.text': "I haven't learned this case yet, using a simple recommendation first",
+  'order.stall.fallbackReason': 'Simple recommendation',
+  'order.stall.noResult': 'No recommendation',
+  'order.stall.retryHint': 'Please add more info and retry',
+
+  // ── 屏3 完整分析四段 ──
+  'order.analysis.requirements': 'Requirements',
+  'order.analysis.matches': 'Matches',
+  'order.analysis.params': 'Parameters',
+  'order.analysis.limits': 'Limitations',
+  'order.analysis.confirmAdd': 'Add to This Meal',
+  'order.analysis.rescreen': 'Re-filter',
+  'order.analysis.addedToast': 'Added to this meal',
+
+  // ── 屏3 参数记录条目 ──
+  'order.param.meal': 'Meal: {meal}',
+  'order.param.mode': 'Mode: {mode}',
+  'order.param.modeFast': 'Fast',
+  'order.param.modeDeep': 'Detailed',
+  'order.param.budget': 'Budget: within ¥{amount} per person',
+  'order.param.diet': 'Restrictions: {diet}',
+  'order.param.dietNone': 'None',
+
+  // ── 屏3 局限声明（正常态）──
+  'order.limit.normal': 'Recommendations are based on the current candidate list and lookup tables; please refer to the actual menu. Ingredients and restrictions are subject to store labeling.',
+
+  // ── 输入栏小块前缀（拼接用）──
+  'order.chip.extraPrefix': 'Have: ',
+  'order.chip.portionPrefix': '{count} dish(es): ',
+  'order.chip.budgetPrefix': 'Budget: within ¥{amount} per person',
+
+  // ── 首页 index ──
+  'index.pageTitle': 'ShiZhi',
+  'index.capture': 'Photo Recognition',
+  'index.template.recognize': 'Image',
+  'index.template.copy': 'Copy',
+  'index.template.nutrition': 'Nutrition',
+  'index.recentMeals': 'Recent Meals',
+  'index.recentEmpty': 'No records',
+  'index.mealDefaultScene': 'Meal',
+  'index.chatEntry': 'Ask Freely',
+
+  // ── 历史页 history ──
+  'history.pageTitle': 'History',
+  'history.empty': 'No records',
+  'history.mealDefaultScene': 'Meal'
+}
+
+// FILE: utils/opencc.js
+// [任务42-第1轮] OpenCC s2t 简转繁实现（精简映射表：常用字 + 常见词级转换）
+// 依据：《多语言与语音方案.md》v1.0 一（OpenCC 本地转换，离线零成本零模型）
+// 说明：本文件为可维护的轻量实现，覆盖高频字词；如需完整覆盖可后换 opencc-js 完整版
+//       （npm 包 opencc-js，Apache 2.0）。接口保持 toTraditional(text) 不变，替换时无需改调用方。
+
+// ── 词级映射（优先匹配，长词优先）──
+const PHRASE_MAP = {
+  '软件': '軟體',
+  '硬件': '硬體',
+  '网络': '網路',
+  '视频': '影片',
+  '信息': '資訊',
+  '数据': '資料',
+  '数据库': '資料庫',
+  '默认': '預設',
+  '设置': '設定',
+  '保存': '儲存',
+  '存储': '儲存',
+  '登录': '登入',
+  '退出': '登出',
+  '账号': '帳號',
+  '用户': '使用者',
+  '菜单': '選單',
+  '打印': '列印',
+  '扫描': '掃描',
+  '识别': '辨識',
+  '语音': '語音',
+  '播报': '播報',
+  '推荐': '推薦',
+  '筛选': '篩選',
+  '预算': '預算',
+  '分量': '分量',
+  '忌口': '忌口',
+  '过敏': '過敏',
+  '标签': '標籤',
+  '分析': '分析',
+  '参数': '參數',
+  '记录': '記錄',
+  '历史': '歷史',
+  '加载': '載入',
+  '关闭': '關閉',
+  '确认': '確認',
+  '取消': '取消',
+  '发送': '發送',
+  '添加': '添加',
+  '完成': '完成',
+  '重试': '重試',
+  '暂无': '暫無',
+  '记录': '記錄',
+  '餐次': '餐次',
+  '早餐': '早餐',
+  '午餐': '午餐',
+  '晚餐': '晚餐',
+  '夜宵': '夜宵',
+  '下午茶': '下午茶',
+  '运动': '運動',
+  '恢复': '恢復',
+  '身体': '身體',
+  '聚餐': '聚餐',
+  '小酌': '小酌',
+  '吃辣': '吃辣',
+  '无辣': '無辣',
+  '清淡': '清淡',
+  '开胃': '開胃',
+  '少油少糖': '少油少糖',
+  '减脂': '減脂',
+  '控卡': '控卡',
+  '健身': '健身',
+  '增肌': '增肌',
+  '解暑': '解暑',
+  '暖胃': '暖胃',
+  '主食': '主食',
+  '主菜': '主菜',
+  '小吃': '小吃',
+  '饮料': '飲料',
+  '香菜': '香菜',
+  '葱蒜': '蔥蒜',
+  '清真': '清真',
+  '猪肉': '豬肉',
+  '酒精': '酒精',
+  '乳糖': '乳糖',
+  '海鲜': '海鮮',
+  '花生': '花生',
+  '坚果': '堅果',
+  '麸质': '麩質',
+  '鸡蛋': '雞蛋',
+  '大豆': '大豆',
+  '素食': '素食',
+  '控糖': '控糖',
+  '限盐': '限鹽',
+  '低嘌呤': '低嘌呤',
+  '痛风': '痛風',
+  '孕产妇': '孕產婦',
+  '禁忌': '禁忌',
+  '普通话': '普通話',
+  '粤语': '粵語',
+  '英语': '英語',
+  '语言': '語言',
+  '模式': '模式',
+  '快速': '快速',
+  '详细': '詳細',
+  '真实': '真實',
+  '资料': '資料',
+  '推断': '推斷',
+  '甄别': '甄別',
+  '生成': '生成',
+  '学会': '學會',
+  '简单': '簡單',
+  '补充': '補充',
+  '要求': '要求',
+  '局限': '局限',
+  '声明': '聲明',
+  '需求': '需求',
+  '清单': '清單',
+  '匹配': '匹配',
+  '结果': '結果',
+  '加入': '加入',
+  '本餐': '本餐',
+  '拍照': '拍照',
+  '识别': '辨識',
+  '识图': '識圖',
+  '文案': '文案',
+  '营养': '營養',
+  '最近': '最近',
+  '自由': '自由',
+  '提问': '提問',
+  '已有': '已有',
+  '米饭': '米飯',
+  '一餐': '一餐',
+  '助手': '助手',
+  '点餐': '點餐',
+  '开启': '開啟',
+  '新的一餐': '新的一餐',
+  '即将': '即將',
+  '支持': '支持'
+}
+
+// ── 字级映射（常见简→繁，词级未命中时逐字转换）──
+const CHAR_MAP = {
+  '软': '軟', '硬': '硬', '网': '網', '络': '絡', '视': '視', '频': '頻',
+  '信': '信', '息': '息', '数': '數', '据': '據', '默': '默', '认': '認',
+  '设': '設', '置': '置', '保': '保', '存': '存', '储': '儲', '登': '登',
+  '录': '錄', '退': '退', '出': '出', '账': '帳', '号': '號', '用': '用',
+  '户': '戶', '菜': '菜', '单': '單', '打': '打', '印': '印', '扫': '掃',
+  '描': '描', '识': '識', '别': '別', '语': '語', '音': '音', '播': '播',
+  '报': '報', '推': '推', '荐': '薦', '筛': '篩', '选': '選', '预': '預',
+  '算': '算', '分': '分', '量': '量', '忌': '忌', '口': '口', '过': '過',
+  '敏': '敏', '标': '標', '签': '籤', '析': '析', '参': '參', '记': '記',
+  '历': '歷', '史': '史', '加': '加', '载': '載', '关': '關', '闭': '閉',
+  '确': '確', '认': '認', '取': '取', '消': '消', '发': '發', '送': '送',
+  '添': '添', '加': '加', '完': '完', '成': '成', '重': '重', '试': '試',
+  '暂': '暫', '无': '無', '餐': '餐', '次': '次', '早': '早', '午': '午',
+  '晚': '晚', '夜': '夜', '宵': '宵', '下': '下', '茶': '茶', '运': '運',
+  '动': '動', '恢': '恢', '复': '復', '身': '身', '体': '體', '聚': '聚',
+  '小': '小', '酌': '酌', '吃': '吃', '辣': '辣', '清': '清', '淡': '淡',
+  '开': '開', '胃': '胃', '少': '少', '油': '油', '糖': '糖', '减': '減',
+  '脂': '脂', '控': '控', '卡': '卡', '健': '健', '增': '增', '肌': '肌',
+  '解': '解', '暑': '暑', '暖': '暖', '主': '主', '食': '食', '饮': '飲',
+  '料': '料', '香': '香', '葱': '蔥', '蒜': '蒜', '猪': '豬', '肉': '肉',
+  '酒': '酒', '精': '精', '乳': '乳', '海': '海', '鲜': '鮮', '花': '花',
+  '生': '生', '坚': '堅', '果': '果', '麸': '麩', '质': '質', '鸡': '雞',
+  '蛋': '蛋', '大': '大', '豆': '豆', '素': '素', '盐': '鹽', '嘌': '嘌',
+  '呤': '呤', '痛': '痛', '风': '風', '孕': '孕', '产': '產', '妇': '婦',
+  '禁': '禁', '忌': '忌', '普': '普', '通': '通', '话': '話', '粤': '粵',
+  '英': '英', '模': '模', '式': '式', '快': '快', '速': '速', '详': '詳',
+  '细': '細', '真': '真', '实': '實', '资': '資', '推': '推', '断': '斷',
+  '甄': '甄', '别': '別', '学': '學', '会': '會', '简': '簡', '补': '補',
+  '充': '充', '要': '要', '求': '求', '局': '局', '限': '限', '声': '聲',
+  '明': '明', '需': '需', '清': '清', '单': '單', '匹': '匹', '配': '配',
+  '结': '結', '果': '果', '入': '入', '本': '本', '拍': '拍', '照': '照',
+  '图': '圖', '文': '文', '案': '案', '营': '營', '养': '養', '最': '最',
+  '近': '近', '自': '自', '由': '由', '提': '提', '问': '問', '助': '助',
+  '手': '手', '点': '點', '餐': '餐', '启': '啟', '新': '新', '的': '的',
+  '一': '一', '即': '即', '将': '將', '支': '支', '持': '持', '记': '記',
+  '录': '錄', '暂': '暫', '无': '無', '载': '載', '入': '入'
+}
+
+// 词级映射按 key 长度降序（长词优先匹配）
+const PHRASE_KEYS = Object.keys(PHRASE_MAP).sort((a, b) => b.length - a.length)
+
+// 简转繁主函数
+function toTraditional(text) {
+  if (!text) return ''
+  let s = String(text)
+
+  // 1) 词级替换（长词优先）
+  PHRASE_KEYS.forEach((k) => {
+    if (s.indexOf(k) >= 0) {
+      s = s.split(k).join(PHRASE_MAP[k])
+    }
+  })
+
+  // 2) 字级兜底（逐字转换）
+  const out = []
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    out.push(CHAR_MAP[ch] || ch)
+  }
+  return out.join('')
+}
+
+module.exports = {
+  toTraditional
+}
+
+---
+
+**极简改动点列表**
+
+- `utils/i18n.js`：新建。语言包注册（zh-Hans/zh-Hant/en）、`getLang`/`getLangPack`/`t`、`setLang`（写 storage `app_lang` + 广播）、`subscribeLangChange`（页面订阅）、`normalizeLang` 兼容 `zh_CN`/`zh_HK`/`en_US`/`yue` 等旧写法。
+- `utils/i18nBehavior.js`：新建。Behavior 在 `attached` 注入 `data.langPack`/`data.lang`，订阅语言变更自动 `setData`；`detached` 退订；提供 `i18nSetLang`/`i18nGetLang` 方法。
+- `locale/zh-Hans.js`：新建。基准包，key 权威来源。覆盖任务39三页全部显示文字：选单栏、13项标签名、分量4类、预算、忌口15项、输入栏、屏2卡片+角标✓/?/⚠固定三句、屏3四段、停摆兜底文案"这类情况我还没学会，先用简单推荐"、首页、历史页。
+- `locale/zh-Hant.js`：新建。按简体逐条转写，key 与 zh-Hans 完全对齐。
+- `locale/en.js`：新建。按简体逐条翻译，key 与 zh-Hans 完全对齐。
+- `utils/opencc.js`：新建。`toTraditional(text)` 简转繁，词级映射（长词优先）+ 字级兜底，注释注明可后换 opencc-js 完整版，接口不变。
+- 本轮不改任何页面文件（pages/order、pages/index、pages/history、app.json、app.js、pages/profile 均未动）。
+
+===== Cycle 2 | outcome=direct handoff=False =====
+// FILE: pages/order/order.js
+// [任务42-第2轮] order页接入i18n与语音
+// 依据：《多语言与语音方案.md》v1.0（设计依据）；《点餐页UI规格汇总_任务39输入.md》v1.3定稿（UI规格权威）
+// 基座：任务39版 pages/order/order.js（第2轮改造基座）
+// 红线：三屏状态机、推荐链路接线、硬约束逻辑逐字不动；只改显示层与新增语音交互。
+// 语音：普通话/英语走同声传译插件 textToSpeech；粤语走云函数 relayTTS。
+
+const { callAI } = require('../../common/gateway.js')
+const rec = require('../../common/recommend.js')
+const i18n = require('../../utils/i18n.js')
+const i18nBehavior = require('../../utils/i18nBehavior.js')
+const opencc = require('../../utils/opencc.js')
+
+// ── [任务42] 同声传译插件（用户已在公众平台添加授权后可用；未授权时降级）──
+let WechatSI = null
+try {
+  WechatSI = requirePlugin('WechatSI')
+} catch (e) {
+  WechatSI = null
+}
+
+// ── 语言标签（旧字段兼容，映射到 i18n 语言键）──
+const LANG_LABEL = { zh_CN: '普通话', en_US: '英语', yue: '粤语' }
+
+// ── [任务42] 语言按钮循环顺序：简体→繁体→English ──
+const LANG_CYCLE = ['zh-Hans', 'zh-Hant', 'en']
+const LANG_BTN_TEXT = { 'zh-Hans': '简', 'zh-Hant': '繁', 'en': 'En' }
+
+// ── [任务42] 界面语言 → 语音识别语种 ──
+const LANG_TO_ASR = { 'zh-Hans': 'zh_CN', 'zh-Hant': 'zh_HK', 'en': 'en_US' }
+// ── [任务42] 界面语言 → 输出指令（简体不加）──
+const LANG_TO_OUTPUT_INSTR = {
+  'zh-Hans': '',
+  'zh-Hant': '以繁體中文輸出全部內容',
+  'en': 'Respond entirely in English'
+}
+
+// ── 规格文档 §一 标签体系（13项，注入prompt文案逐字以表格为准）──
+const TAGS = [
+  { key: 'sport_recover', name: '运动后补充', type: '场合', prompt: '运动后恢复，优先补水、电解质和适量碳水蛋白' },
+  { key: 'body_recover',  name: '身体恢复',   type: '场合', prompt: '身体恢复期，推荐清淡易消化、低脂温和的' },
+  { key: 'group_dining',  name: '多人聚餐',   type: '场合', prompt: '多人聚餐，推荐适合分享、接受度高的' },
+  { key: 'drink',         name: '小酌',       type: '场合', prompt: '有小酌，推荐佐酒的，兼顾护胃' },
+  { key: 'spicy',         name: '吃辣',       type: '口味', prompt: '想吃辣，辣度按菜单标注可商量' },
+  { key: 'no_spicy',      name: '无辣',       type: '口味', prompt: '不要辣' },
+  { key: 'light',         name: '清淡',       type: '口味', prompt: '要清淡的' },
+  { key: 'appetite',      name: '开胃',       type: '口味', prompt: '想开胃，推荐酸味或清爽方向的' },
+  { key: 'less_oil_sugar',name: '少油少糖',   type: '口味', prompt: '少油少糖' },
+  { key: 'fat_loss',      name: '减脂控卡',   type: '其他', prompt: '减脂期，推荐低热量高饱腹的' },
+  { key: 'muscle_gain',   name: '健身增肌',   type: '其他', prompt: '健身增肌，优先高蛋白' },
+  { key: 'cool_down',     name: '解暑',       type: '其他', prompt: '解暑，推荐清凉的' },
+  { key: 'warm_stomach',  name: '暖胃',       type: '其他', prompt: '想吃点暖胃的' }
+]
+
+// ── 规格文档 §五 常见忌口表15项 ──
+const DIET_RESTRICTIONS = [
+  { key: 'no_spicy_diet', name: '不吃辣' },
+  { key: 'no_cilantro',   name: '不吃香菜' },
+  { key: 'no_garlic',     name: '不吃葱蒜' },
+  { key: 'halal',         name: '清真（忌猪肉酒精）' },
+  { key: 'lactose',       name: '乳糖不耐' },
+  { key: 'seafood',       name: '海鲜过敏' },
+  { key: 'peanut_nut',    name: '花生坚果过敏' },
+  { key: 'gluten',        name: '麸质过敏' },
+  { key: 'egg',           name: '鸡蛋过敏' },
+  { key: 'soy',           name: '大豆过敏' },
+  { key: 'vegetarian',    name: '素食（蛋奶素/纯素）' },
+  { key: 'sugar_control', name: '控糖' },
+  { key: 'salt_control',  name: '限盐' },
+  { key: 'low_purine',    name: '低嘌呤（痛风）' },
+  { key: 'pregnancy',     name: '孕产妇禁忌' }
+]
+
+// ── 规格文档 §二 餐切换选项 ──
+const MEALS = ['早餐', '午餐', '晚餐', '夜宵', '下午茶']
+// 餐次 → i18n key
+const MEAL_KEYS = ['order.meal.breakfast', 'order.meal.lunch', 'order.meal.dinner', 'order.meal.lateNight', 'order.meal.afternoonTea']
+
+// ── 规格文档 §三 分量控件四类 ──
+const PORTION_TYPES = [
+  { key: 'staple',  name: '主食', i18nKey: 'order.portion.staple' },
+  { key: 'main',    name: '主菜', i18nKey: 'order.portion.main' },
+  { key: 'snack',   name: '小吃', i18nKey: 'order.portion.snack' },
+  { key: 'drink_p', name: '饮料', i18nKey: 'order.portion.drink' }
+]
+
+// ── 规格文档 §六 停摆态兜底文案（逐字）──
+const STALL_TEXT = '这类情况我还没学会，先用简单推荐'
+
+// ── 本地存储键 ──
+const LS_TAG_FREQ = 'order_tag_freq'
+const LS_DIET     = 'order_diet_profile'
+const LS_MEAL     = 'order_last_meal'
+
+// ── 三屏常量 ──
+const SCREEN = { MENU: 1, RESULT: 2, ANALYSIS: 3 }
+
+// ── 角标固定三句说明（逐字按Walter裁决原文）──
+const BADGE_EXPLAIN = {
+  '✓': '来自真实资料',
+  '?': '结果基于真实资料推断，注意甄别',
+  '⚠': '结果主要来自ai生成信息，注意甄别'
+}
+// 角标 → i18n key
+const BADGE_I18N_KEY = {
+  '✓': 'order.badge.real',
+  '?': 'order.badge.inferred',
+  '⚠': 'order.badge.ai'
+}
+
+// ===========================================================================
+// 辅助函数
+// ===========================================================================
+
+function extractText(res) {
+  if (!res) return ''
+  if (typeof res === 'string') return res
+  if (typeof res.text === 'string') return res.text
+  if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
+    const c = res.choices[0].message.content
+    if (typeof c === 'string') return c
+    if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
+  }
+  if (typeof res.content === 'string') return res.content
+  return ''
+}
+
+function getTagByKey(key) {
+  return TAGS.find((t) => t.key === key) || null
+}
+
+function getTagByName(name) {
+  return TAGS.find((t) => t.name === name) || null
+}
+
+function readTagFreq() {
+  try {
+    return wx.getStorageSync(LS_TAG_FREQ) || {}
+  } catch (e) {
+    return {}
+  }
+}
+
+function writeTagFreq(freq) {
+  try {
+    wx.setStorageSync(LS_TAG_FREQ, freq || {})
+  } catch (e) { /* 忽略 */ }
+}
+
+function readDietProfile() {
+  try {
+    return wx.getStorageSync(LS_DIET) || {}
+  } catch (e) {
+    return {}
+  }
+}
+
+function writeDietProfile(profile) {
+  try {
+    wx.setStorageSync(LS_DIET, profile || {})
+  } catch (e) { /* 忽略 */ }
+}
+
+function top3Tags() {
+  const freq = readTagFreq()
+  const sorted = TAGS.slice().sort((a, b) => (freq[b.key] || 0) - (freq[a.key] || 0))
+  return sorted.slice(0, 3)
+}
+
+function dietProfileToKeys(profile) {
+  return Object.keys(profile || {}).filter((k) => profile[k])
+}
+
+function dietProfileToText(profile) {
+  const keys = dietProfileToKeys(profile)
+  if (!keys.length) return ''
+  const names = keys.map((k) => {
+    const d = DIET_RESTRICTIONS.find((x) => x.key === k)
+    return d ? d.name : k
+  })
+  return '忌口（硬过滤）：' + names.join('、')
+}
+
+// [任务42] 展示层繁体兜底：当前语言为繁体时，对模型返回文本过 opencc
+function applyDisplayLang(text, lang) {
+  if (!text) return text
+  if (lang === 'zh-Hant') return opencc.toTraditional(String(text))
+  return text
+}
+
+// ===========================================================================
+// Page
+// ===========================================================================
+
+Page({
+  behaviors: [i18nBehavior],
+
+  data: {
+    pageTitle: '点餐助手',
+
+    // ── 三屏状态机 ──
+    screen: SCREEN.MENU,
+
+    // ── 选单栏（规格 §二）──
+    mealOptions: MEALS,
+    meal: '午餐',
+    mealIndex: 1,
+    topTags: [],
+    showPlusPanel: false,
+    allTags: TAGS,
+
+    // ── [任务42] 语言按钮 ──
+    langBtnText: '简',
+
+    // ── 已选小块 ──
+    chips: [],
+
+    // ── 分量控件（规格 §三）──
+    portionTypes: PORTION_TYPES,
+    portions: { staple: 0, main: 0, snack: 0, drink_p: 0 },
+    portionTotal: 0,
+
+    // ── 预算控件（规格 §四）──
+    budget: 50,
+    budgetMin: 0,
+    budgetMax: 200,
+    budgetStep: 10,
+
+    // ── 忌口（规格 §五）──
+    showDietPanel: false,
+    dietList: DIET_RESTRICTIONS,
+    dietProfile: {},
+    dietCustom: '',
+
+    // ── 快速/详细切换 ──
+    mode: 'fast',
+
+    // ── 语言选择（旧字段兼容）──
+    translateLang: 'zh_CN',
+
+    // ── 加菜/已有食物输入 ──
+    extraInput: '',
+
+    // ── 自由输入框 ──
+    userInput: '',
+
+    // ── 会话与推荐 ──
+    session: null,
+    mealSession: null,
+
+    // ── 屏2 推荐结果 ──
+    resultCards: [],
+    badgeExplain: '',
+    showBadgeExplain: false,
+
+    // ── 屏3 完整分析四段 ──
+    fullAnalysis: { requirements: [], matches: [], params: [], limits: [] },
+
+    // ── 停摆态 ──
+    stalled: false,
+    stallText: STALL_TEXT,
+
+    // ── 加载态 ──
+    loading: false,
+
+    // ── [任务42] 语音输入 ──
+    recording: false,
+
+    // ── [任务42] 播报 ──
+    speaking: false,
+    ttsFallbackText: '',
+    yueTtsReady: false,
+
+    // ── [任务42] 音色选择窗（占位弹层，仅"默认音色"一项）──
+    showVoicePanel: false,
+    voiceOptions: [{ key: 'default', name: '默认音色' }],
+    voiceSelected: 'default',
+
+    // ── [任务36] 保留字段（兼容）──
+    menuConfirmed: false,
+    candidates: [],
+    translating: false,
+    translateResult: null,
+    phraseText: '',
+    phraseConfirmed: false
+  },
+
+  // =========================================================================
+  // 生命周期
+  // =========================================================================
+
+  onLoad() {
+    this.setData({ yueTtsReady: false })
+
+    let meal = '午餐'
+    try {
+      const last = wx.getStorageSync(LS_MEAL)
+      if (last && MEALS.indexOf(last) >= 0) meal = last
+    } catch (e) { /* 忽略 */ }
+
+    const topTags = top3Tags()
+    const dietProfile = readDietProfile()
+
+    this.setData({
+      meal,
+      mealIndex: MEALS.indexOf(meal),
+      topTags,
+      dietProfile,
+      langBtnText: LANG_BTN_TEXT[i18n.getLang()] || '简'
+    })
+
+    this.startNewMealSession()
+  },
+
+  // [任务42] 语言变更时刷新按钮文字与角标说明（其余由 i18nBehavior 处理）
+  onLangChanged(lang) {
+    this.setData({
+      langBtnText: LANG_BTN_TEXT[lang] || '简',
+      // 兼容旧字段
+      translateLang: lang === 'en' ? 'en_US' : (lang === 'zh-Hant' ? 'yue' : 'zh_CN')
+    })
+  },
+
+  // =========================================================================
+  // 会话
+  // =========================================================================
+
+  startNewMealSession() {
+    const mealId = `meal_${Date.now()}`
+    const mealSession = rec.createMealSession({ mealId })
+    this.setData({
+      mealSession,
+      screen: SCREEN.MENU,
+      chips: [],
+      resultCards: [],
+      fullAnalysis: { requirements: [], matches: [], params: [], limits: [] },
+      stalled: false,
+      userInput: '',
+      extraInput: ''
+    })
+  },
+
+  onNewMeal() {
+    this.startNewMealSession()
+    wx.showToast({ title: i18n.t('order.newMealToast'), icon: 'none' })
+  },
+
+  // =========================================================================
+  // 屏1：选单栏
+  // =========================================================================
+
+  onMealChange(e) {
+    const idx = Number(e.detail.value)
+    const meal = MEALS[idx] || '午餐'
+    this.setData({ mealIndex: idx, meal })
+    try { wx.setStorageSync(LS_MEAL, meal) } catch (err) { /* 忽略 */ }
+  },
+
+  onTapTag(e) {
+    const key = e.currentTarget.dataset.key
+    this.addTagChip(key)
+  },
+
+  togglePlusPanel() {
+    this.setData({ showPlusPanel: !this.data.showPlusPanel })
+  },
+
+  onTapTagInPanel(e) {
+    const key = e.currentTarget.dataset.key
+    this.addTagChip(key)
+  },
+
+  addTagChip(key) {
+    const tag = getTagByKey(key)
+    if (!tag) return
+    if (this.data.chips.some((c) => c.kind === 'tag' && c.payload === key)) {
+      wx.showToast({ title: i18n.t('order.input.alreadyTagToast'), icon: 'none' })
+      return
+    }
+    const chips = this.data.chips.concat([{
+      id: `chip_tag_${key}_${Date.now()}`,
+      kind: 'tag',
+      label: tag.name,
+      payload: key
+    }])
+    this.setData({ chips })
+
+    const freq = readTagFreq()
+    freq[key] = (freq[key] || 0) + 1
+    writeTagFreq(freq)
+    this.setData({ topTags: top3Tags() })
+  },
+
+  // =========================================================================
+  // [任务42] 语言按钮：循环切换 简体→繁体→English
+  // =========================================================================
+
+  onTapLangBtn() {
+    const cur = i18n.getLang()
+    const idx = LANG_CYCLE.indexOf(cur)
+    const next = LANG_CYCLE[(idx + 1) % LANG_CYCLE.length]
+    i18n.setLang(next)   // 写 storage + 全局广播
+    this.onLangChanged(next)
+  },
+
+  // =========================================================================
+  // 分量控件
+  // =========================================================================
+
+  onPortionChange(e) {
+    const type = e.currentTarget.dataset.type
+    const delta = Number(e.currentTarget.dataset.delta)
+    const cur = this.data.portions[type] || 0
+    const next = cur + delta
+    if (next < 0 || next > 3) return
+
+    const portions = Object.assign({}, this.data.portions, { [type]: next })
+    const total = PORTION_TYPES.reduce((s, t) => s + (portions[t.key] || 0), 0)
+    if (total > 3) {
+      wx.showToast({ title: i18n.t('order.panel.portionLimitToast'), icon: 'none' })
+      return
+    }
+
+    this.setData({ portions, portionTotal: total })
+    this.syncPortionChip()
+  },
+
+  syncPortionChip() {
+    const p = this.data.portions
+    const parts = PORTION_TYPES
+      .filter((t) => (p[t.key] || 0) > 0)
+      .map((t) => `${t.name}${p[t.key]}`)
+    const total = PORTION_TYPES.reduce((s, t) => s + (p[t.key] || 0), 0)
+
+    let chips = this.data.chips.filter((c) => c.kind !== 'portion')
+    if (total > 0) {
+      chips = chips.concat([{
+        id: 'chip_portion',
+        kind: 'portion',
+        label: `点${total}道：${parts.join('、')}`,
+        payload: Object.assign({}, p)
+      }])
+    }
+    this.setData({ chips })
+  },
+
+  // =========================================================================
+  // 预算控件
+  // =========================================================================
+
+  onBudgetChange(e) {
+    const budget = Number(e.detail.value)
+    this.setData({ budget })
+    this.syncBudgetChip()
+  },
+
+  syncBudgetChip() {
+    let chips = this.data.chips.filter((c) => c.kind !== 'budget')
+    chips = chips.concat([{
+      id: 'chip_budget',
+      kind: 'budget',
+      label: `预算：人均${this.data.budget}以内`,
+      payload: this.data.budget
+    }])
+    this.setData({ chips })
+  },
+
+  // =========================================================================
+  // 忌口管理
+  // =========================================================================
+
+  openDietPanel() {
+    this.setData({ showDietPanel: true })
+  },
+
+  closeDietPanel() {
+    this.setData({ showDietPanel: false })
+  },
+
+  onToggleDiet(e) {
+    const key = e.currentTarget.dataset.key
+    const profile = Object.assign({}, this.data.dietProfile)
+    profile[key] = !profile[key]
+    if (!profile[key]) delete profile[key]
+    this.setData({ dietProfile: profile })
+    writeDietProfile(profile)
+  },
+
+  onDietCustomInput(e) {
+    this.setData({ dietCustom: e.detail.value })
+  },
+
+  onAddDietCustom() {
+    const text = (this.data.dietCustom || '').trim()
+    if (!text) return
+    const profile = Object.assign({}, this.data.dietProfile)
+    profile[`custom_${text}`] = true
+    this.setData({ dietProfile: profile, dietCustom: '' })
+    writeDietProfile(profile)
+    wx.showToast({ title: i18n.t('order.dietPanel.addedToast'), icon: 'none' })
+  },
+
+  // =========================================================================
+  // 快速/详细切换
+  // =========================================================================
+
+  setFast() {
+    this.setData({ mode: 'fast' })
+  },
+
+  setDeep() {
+    this.setData({ mode: 'deep' })
+  },
+
+  // =========================================================================
+  // 语言选择（旧入口，兼容保留）
+  // =========================================================================
+
+  onPickLang(e) {
+    const lang = e.currentTarget.dataset.lang
+    if (!LANG_LABEL[lang]) return
+    this.setData({ translateLang: lang, phraseConfirmed: false })
+  },
+
+  // =========================================================================
+  // 加菜/已有食物输入
+  // =========================================================================
+
+  onExtraInput(e) {
+    this.setData({ extraInput: e.detail.value })
+  },
+
+  onConfirmExtra() {
+    const text = (this.data.extraInput || '').trim()
+    if (!text) return
+    const chips = this.data.chips.concat([{
+      id: `chip_extra_${Date.now()}`,
+      kind: 'extra',
+      label: `已有：${text}`,
+      payload: text
+    }])
+    this.setData({ chips, extraInput: '' })
+  },
+
+  // =========================================================================
+  // 输入栏小块删除
+  // =========================================================================
+
+  onRemoveChip(e) {
+    const id = e.currentTarget.dataset.id
+    const chip = this.data.chips.find((c) => c.id === id)
+    let portions = this.data.portions
+    if (chip && chip.kind === 'portion') {
+      portions = { staple: 0, main: 0, snack: 0, drink_p: 0 }
+    }
+    const chips = this.data.chips.filter((c) => c.id !== id)
+    const portionTotal = PORTION_TYPES.reduce((s, t) => s + (portions[t.key] || 0), 0)
+    this.setData({ chips, portions, portionTotal })
+  },
+
+  // =========================================================================
+  // 自由输入框
+  // =========================================================================
+
+  onUserInput(e) {
+    this.setData({ userInput: e.detail.value })
+  },
+
+  // =========================================================================
+  // [任务42] 语音输入：按住说话 → 同声传译插件 speechToText
+  // =========================================================================
+
+  onMicStart() {
+    if (!WechatSI) {
+      wx.showToast({ title: '语音功能即将上线', icon: 'none' })
+      return
+    }
+    const lang = i18n.getLang()
+    const asrLang = LANG_TO_ASR[lang] || 'zh_CN'
+    this._asrLang = asrLang
+    this.setData({ recording: true })
+
+    this._manager = WechatSI.getRecordRecognitionManager()
+    this._manager.onRecognize = (res) => {
+      // 中间结果实时填入输入栏（可编辑）
+      this.setData({ userInput: res.result || '' })
+    }
+    this._manager.onStop = (res) => {
+      this.setData({ recording: false, userInput: res.result || this.data.userInput })
+    }
+    this._manager.onError = () => {
+      this.setData({ recording: false })
+      wx.showToast({ title: '识别失败，请重试', icon: 'none' })
+    }
+    this._manager.start({ lang: asrLang })
+  },
+
+  onMicEnd() {
+    if (!this._manager) return
+    try {
+      this._manager.stop()
+    } catch (e) { /* 忽略 */ }
+    this.setData({ recording: false })
+  },
+
+  // =========================================================================
+  // 后台拼接 prompt（小块 → 需求文本）
+  // =========================================================================
+
+  buildRequirementText() {
+    const parts = []
+
+    parts.push(`餐次：${this.data.meal}`)
+
+    this.data.chips
+      .filter((c) => c.kind === 'tag')
+      .forEach((c) => {
+        const tag = getTagByKey(c.payload)
+        if (tag) parts.push(tag.prompt)
+      })
+
+    const p = this.data.portions
+    const total = PORTION_TYPES.reduce((s, t) => s + (p[t.key] || 0), 0)
+    if (total > 0) {
+      const seg = PORTION_TYPES
+        .filter((t) => (p[t.key] || 0) > 0)
+        .map((t) => `${t.name}${p[t.key]}`)
+      parts.push(`点${total}道：${seg.join('、')}`)
+    }
+
+    if (this.data.chips.some((c) => c.kind === 'budget')) {
+      parts.push(`预算人均${this.data.budget}以内`)
+    }
+
+    const dietText = dietProfileToText(this.data.dietProfile)
+    if (dietText) parts.push(dietText)
+
+    this.data.chips
+      .filter((c) => c.kind === 'extra')
+      .forEach((c) => parts.push(`已有食物：${c.payload}`))
+
+    if (this.data.mode === 'fast') parts.push('快速推荐')
+
+    const ui = (this.data.userInput || '').trim()
+    if (ui) parts.push(ui)
+
+    // [任务42] 模型输出语言：按当前界面语言追加输出指令（简体不加）
+    const lang = i18n.getLang()
+    const instr = LANG_TO_OUTPUT_INSTR[lang]
+    if (instr) parts.push(instr)
+
+    return parts.join('；')
+  },
+
+  // =========================================================================
+  // 屏1 → 屏2：发起推荐
+  // =========================================================================
+
+  onSend() {
+    if (this.data.loading) return
+
+    const requirementText = this.buildRequirementText()
+
+    if (!this.data.chips.length && !(this.data.userInput || '').trim()) {
+      wx.showToast({ title: i18n.t('order.input.needSelectToast'), icon: 'none' })
+      return
+    }
+
+    this.setData({ loading: true })
+
+    let mealSession = this.data.mealSession
+    try {
+      rec.judgeScene(mealSession, this.data.meal)
+      rec.collectRequirements(mealSession, {
+        userRequirements: this.data.chips.map((c) => c.label),
+        degreeWords: [],
+        hardFilters: {
+          allergens: dietProfileToKeys(this.data.dietProfile),
+          diet: dietProfileToKeys(this.data.dietProfile),
+          excluded: []
+        }
+      })
+    } catch (e) {
+      console.warn('会话状态推进异常', e)
+    }
+
+    try {
+      rec.loadCandidates(mealSession, mealSession.candidates || [])
+    } catch (e) {
+      console.warn('候选装载异常', e)
+    }
+
+    const gateway = {
+      invoke: ({ mode, messages }) => {
+        return callAI(mode, messages)
+      }
+    }
+
+    const db = {
+      collection: () => ({
+        where: () => ({ orderBy: () => ({ limit: () => ({ get: () => Promise.resolve({ data: [] }) }) }) }),
+        add: () => Promise.resolve({})
+      })
+    }
+
+    rec.recommend({
+      session: mealSession,
+      userInput: requirementText,
+      gateway,
+      db
+    })
+      .then((res) => {
+        this.setData({ loading: false, mealSession: res.session })
+
+        if (res.tableGaps && res.tableGaps.length) {
+          this.setData({
+            stalled: true,
+            screen: SCREEN.RESULT,
+            resultCards: this.buildFallbackCards(res.firstStage)
+          })
+          return
+        }
+
+        this.setData({
+          stalled: false,
+          screen: SCREEN.RESULT,
+          resultCards: this.parseResultCards(res.firstStage)
+        })
+      })
+      .catch((err) => {
+        console.error('推荐失败', err)
+        this.setData({
+          loading: false,
+          stalled: true,
+          screen: SCREEN.RESULT,
+          resultCards: this.buildFallbackCards(null)
+        })
+      })
+  },
+
+  // 解析推荐返回 → 屏2卡片（[任务42] 展示层繁体兜底）
+  parseResultCards(firstStage) {
+    const raw = extractText(firstStage)
+    const lang = i18n.getLang()
+    const text = applyDisplayLang(raw, lang)
+    if (!text) return this.buildFallbackCards(null)
+
+    let arr = null
+    try {
+      arr = JSON.parse(text)
+    } catch (e) { arr = null }
+
+    if (Array.isArray(arr)) {
+      return arr.map((item, i) => ({
+        rank: item.rank || i + 1,
+        name: item.name || item.dish || '未命名',
+        score: item.score != null ? item.score : '-',
+        reason: item.reason || item.oneLine || '',
+        badge: item.support || item.badge || '?',
+        dishId: item.dishId || ''
+      }))
+    }
+
+    return String(text).split('\n').filter(Boolean).map((line, i) => ({
+      rank: i + 1,
+      name: line,
+      score: '-',
+      reason: '',
+      badge: '?',
+      dishId: ''
+    }))
+  },
+
+  // 停摆态兜底结果（[任务42] 展示层繁体兜底）
+  buildFallbackCards(firstStage) {
+    const raw = extractText(firstStage)
+    const lang = i18n.getLang()
+    const text = applyDisplayLang(raw, lang)
+    const cards = []
+    if (text) {
+      String(text).split('\n').filter(Boolean).slice(0, 5).forEach((line, i) => {
+        cards.push({
+          rank: i + 1,
+          name: line,
+          score: '-',
+          reason: i18n.t('order.stall.fallbackReason'),
+          badge: '⚠',
+          dishId: ''
+        })
+      })
+    }
+    if (!cards.length) {
+      cards.push({
+        rank: 1,
+        name: i18n.t('order.stall.noResult'),
+        score: '-',
+        reason: i18n.t('order.stall.retryHint'),
+        badge: '⚠',
+        dishId: ''
+      })
+    }
+    return cards
+  },
+
+  // =========================================================================
+  // 屏2：角标说明弹层
+  // =========================================================================
+
+  onTapBadge(e) {
+    const badge = e.currentTarget.dataset.badge
+    const key = BADGE_I18N_KEY[badge] || BADGE_I18N_KEY['?']
+    this.setData({
+      showBadgeExplain: true,
+      badgeExplain: i18n.t(key)
+    })
+  },
+
+  closeBadgeExplain() {
+    this.setData({ showBadgeExplain: false })
+  },
+
+  // =========================================================================
+  // 屏2 → 屏3：展开完整分析
+  // =========================================================================
+
+  onExpandAnalysis() {
+    const mealSession = this.data.mealSession
+    const lang = i18n.getLang()
+    const modeText = this.data.mode === 'fast'
+      ? i18n.t('order.param.modeFast')
+      : i18n.t('order.param.modeDeep')
+    const dietText = dietProfileToText(this.data.dietProfile) || i18n.t('order.param.dietNone')
+
+    const full = {
+      requirements: this.data.chips.map((c) => c.label),
+      matches: this.data.resultCards.map((c) => `${c.rank}. ${c.name}（${c.score}）`),
+      params: [
+        i18n.t('order.param.meal').replace('{meal}', this.data.meal),
+        i18n.t('order.param.mode').replace('{mode}', modeText),
+        i18n.t('order.param.budget').replace('{amount}', String(this.data.budget)),
+        i18n.t('order.param.diet').replace('{diet}', dietText)
+      ],
+      limits: this.data.stalled
+        ? [i18n.t('order.stall.text')]
+        : [i18n.t('order.limit.normal')]
+    }
+
+    try {
+      rec.expandAnalysis(mealSession, full)
+    } catch (e) {
+      console.warn('展开分析状态推进异常', e)
+    }
+
+    this.setData({ screen: SCREEN.ANALYSIS, fullAnalysis: full, mealSession })
+  },
+
+  // =========================================================================
+  // 屏3：确认加入本餐 / 重新筛选
+  // =========================================================================
+
+  onConfirmAdd() {
+    const mealSession = this.data.mealSession
+    const db = {
+      collection: () => ({
+        add: () => Promise.resolve({})
+      })
+    }
+    rec.confirmAndPersist(mealSession, db)
+      .then(() => {
+        wx.showToast({ title: i18n.t('order.analysis.addedToast'), icon: 'none' })
+        this.startNewMealSession()
+      })
+      .catch((err) => {
+        console.warn('入库失败', err)
+        wx.showToast({ title: i18n.t('order.analysis.addedToast'), icon: 'none' })
+        this.startNewMealSession()
+      })
+  },
+
+  onRescreen() {
+    this.setData({ screen: SCREEN.MENU, resultCards: [], stalled: false })
+  },
+
+  // =========================================================================
+  // [任务42] 播报：普通话/英语走插件；粤语走云函数 relayTTS
+  // =========================================================================
+
+  // 取当前界面语言版本的播报文本（屏3完整分析优先，否则用话术）
+  buildSpeakText() {
+    // 优先播报当前屏3的完整分析文本
+    const fa = this.data.fullAnalysis
+    if (fa && (fa.requirements.length || fa.matches.length)) {
+      const segs = [
+        i18n.t('order.analysis.requirements') + '：' + fa.requirements.join('、'),
+        i18n.t('order.analysis.matches') + '：' + fa.matches.join('；')
+      ]
+      return segs.join('\n')
+    }
+    // 退回到话术文本
+    return this.data.phraseText || ''
+  },
+
+  handleSpeak() {
+    const text = this.buildSpeakText()
+    if (!text) {
+      wx.showToast({ title: '暂无可播报内容', icon: 'none' })
+      return
+    }
+    const lang = i18n.getLang()
+
+    if (lang === 'zh-Hant') {
+      // 繁体 → 粤语 TTS 走云函数
+      this.speakViaRelayTTS(text)
+      return
+    }
+
+    // 简体 → zh_CN；英文 → en_US
+    if (!WechatSI) {
+      this.fallbackToText(text)
+      return
+    }
+    const ttsLang = lang === 'en' ? 'en_US' : 'zh_CN'
+    this.setData({ speaking: true, ttsFallbackText: '' })
+    WechatSI.textToSpeech({
+      lang: ttsLang,
+      tts: true,
+      content: text,
+      success: (res) => {
+        this.setData({ speaking: false })
+        const audio = wx.createInnerAudioContext()
+        audio.src = res.filename
+        audio.play()
+        this._audio = audio
+      },
+      fail: () => this.fallbackToText(text)
+    })
+  },
+
+  // 粤语播报：云函数 relayTTS（未配置时返回 error=tts_not_configured）
+  speakViaRelayTTS(text) {
+    this.setData({ speaking: true, ttsFallbackText: '' })
+    wx.cloud.callFunction({
+      name: 'relayTTS',
+      data: { text, lang: 'yue' },
+      success: (res) => {
+        const r = (res && res.result) || {}
+        if (r.error === 'tts_not_configured') {
+          this.setData({ speaking: false })
+          wx.showToast({ title: '粤语播报即将上线', icon: 'none' })
+          return
+        }
+        if (r.error || !r.audioUrl) {
+          this.fallbackToText(text)
+          return
+        }
+        this.setData({ speaking: false })
+        const audio = wx.createInnerAudioContext()
+        audio.src = r.audioUrl
+        audio.play()
+        this._audio = audio
+      },
+      fail: () => this.fallbackToText(text)
+    })
+  },
+
+  fallbackToText(text) {
+    this.setData({ speaking: false, ttsFallbackText: text || this.data.phraseText })
+    wx.showToast({ title: '播报失败，请照文本念', icon: 'none' })
+  },
+
+  // =========================================================================
+  // [任务42] 音色选择窗（占位弹层，仅"默认音色"一项，不可修改）
+  // =========================================================================
+
+  openVoicePanel() {
+    this.setData({ showVoicePanel: true })
+  },
+
+  closeVoicePanel() {
+    this.setData({ showVoicePanel: false })
+  },
+
+  onTapVoiceOption() {
+    // 占位：仅"默认音色"，不可修改
+    this.setData({ voiceSelected: 'default' })
+  },
+
+  // =========================================================================
+  // [任务36] 保留：翻译 / 话术（不改动，仅保留兼容）
+  // =========================================================================
+
+  onMenuConfirmed(confirmedList) {
+    this.setData({
+      menuConfirmed: true,
+      candidates: Array.isArray(confirmedList) ? confirmedList : []
+    })
+  },
+
+  handleTranslate() {
+    if (!this.data.menuConfirmed) {
+      wx.showToast({ title: '请先确认菜单', icon: 'none' })
+      return
+    }
+    this.setData({ translating: true })
+    const fast = this.data.mode === 'fast'
+    const messages = [
+      { role: 'system', content: buildTranslateSystem(this.data.translateLang, fast) },
+      { role: 'user', content: JSON.stringify(this.data.candidates) }
+    ]
+    callAI('translate', messages)
+      .then((res) => {
+        const text = extractText(res)
+        this.setData({
+          translating: false,
+          translateResult: { list: parseTranslate(text, this.data.candidates), fallback: false }
+        })
+      })
+      .catch(() => {
+        this.setData({ translating: false, translateResult: { list: [], fallback: true } })
+        wx.showToast({ title: '翻译失败，已展示原文', icon: 'none' })
+      })
+  },
+
+  handleGenPhrase() {
+    if (!this.data.candidates.length) {
+      wx.showToast({ title: '请先确认候选', icon: 'none' })
+      return
+    }
+    const messages = [
+      { role: 'system', content: buildPhraseSystem(this.data.translateLang) },
+      { role: 'user', content: JSON.stringify(this.data.candidates) }
+    ]
+    callAI('order_phrase', messages)
+      .then((res) => {
+        const text = extractText(res)
+        const safe = phraseHonorsWhitelist(text, this.data.candidates)
+        this.setData({
+          phraseText: safe ? text : buildTemplatePhrase(this.data.candidates),
+          phraseConfirmed: false,
+          ttsFallbackText: ''
+        })
+      })
+      .catch(() => {
+        this.setData({
+          phraseText: buildTemplatePhrase(this.data.candidates),
+          phraseConfirmed: false,
+          ttsFallbackText: ''
+        })
+      })
+  },
+
+  confirmPhrase() {
+    if (!this.data.phraseText || !this.data.phraseText.trim()) {
+      wx.showToast({ title: '话术为空', icon: 'none' })
+      return
+    }
+    this.setData({ phraseConfirmed: true })
+  },
+
+  onPhraseEdit(e) {
+    this.setData({ phraseText: e.detail.value, phraseConfirmed: false })
+  },
+
+  handleSpeakDisabled() {
+    wx.showToast({ title: '语音功能即将上线', icon: 'none' })
+  }
+})
+
+// ── [任务36] 模块内辅助函数（保留）────────────────────────────────
+
+function buildTranslateSystem(lang, fast) {
+  return [
+    'role: 菜单翻译',
+    `目标语: ${LANG_LABEL[lang]}`,
+    '硬约束:',
+    '  - 只翻译给定清单内的菜名与标记，不得新增/删除/合并条目',
+    '  - 过敏原/禁忌成分必须逐条对应译出，不得省略',
+    '输出:',
+    fast
+      ? '  - 快速模式：仅返回 [{ "name": 原名, "translation": 译文 }]，不译长描述/营养'
+      : '  - 深度模式：返回 [{ "name": 原名, "translation": 译文, "flag": 成分标记译文, "note": 备注 }]'
+  ].join('\n')
+}
+
+function buildPhraseSystem(lang) {
+  return [
+    'role: 点餐话术生成',
+    `目标语: ${LANG_LABEL[lang]}`,
+    '硬约束:',
+    '  - 生成的菜名只许来自已确认候选清单，不得增删、不得改写菜名、不得杜撰菜品',
+    '  - 数量、口味备注以清单为准，不得臆造',
+    '  - 不输出价格、不输出营养数值',
+    '输出: 一段可直接对服务员说的口语化点餐要求'
+  ].join('\n')
+}
+
+function parseTranslate(text, candidates) {
+  try {
+    const arr = JSON.parse(text)
+    if (Array.isArray(arr)) return arr
+  } catch (e) { /* 落到纯文本 */ }
+  return String(text || '').split('\n').filter(Boolean).map((line, i) => ({
+    name: (candidates[i] && candidates[i].name) || '',
+    translation: line
+  }))
+}
+
+function phraseHonorsWhitelist(text, candidates) {
+  if (!text) return false
+  const names = (candidates || []).map((c) => c.name).filter(Boolean)
+  if (!names.length) return false
+  return names.some((n) => text.indexOf(n) >= 0)
+}
+
+function buildTemplatePhrase(candidates) {
+  const names = (candidates || []).map((c) =>
+    c.count ? `${c.name}x${c.count}` : c.name
+  ).filter(Boolean)
+  return `麻烦点：${names.join('、')}。谢谢！`
+}
+
+// FILE: pages/order/order.wxml
+<!-- FILE: pages/order/order.wxml -->
+<!-- [任务42-第2轮] order页接入i18n与语音：全部显示文字走 langPack；语言按钮[简▾]循环切换；麦克风按住说话；播报按钮启用；音色占位弹层 -->
+<view class="order-page">
+  <view class="title">{{langPack['order.pageTitle']}}</view>
+
+  <!-- 顶部：新的一餐 + 语言按钮[简▾] -->
+  <view class="top-bar">
+    <button size="mini" bindtap="onNewMeal">{{langPack['order.newMeal']}}</button>
+    <view class="lang-btn" bindtap="onTapLangBtn">{{langBtnText}}▾</view>
+  </view>
+
+  <!-- ==================== 屏1：选单栏 + 输入行 ==================== -->
+  <block wx:if="{{screen === 1}}">
+
+    <!-- 选单栏 -->
+    <view class="menu-bar">
+      <picker mode="selector" range="{{mealOptions}}" value="{{mealIndex}}" bindchange="onMealChange">
+        <view class="meal-picker">{{langPack['order.menuBar.mealPrefix']}}{{meal}}▾</view>
+      </picker>
+
+      <view class="chip-inline" wx:for="{{topTags}}" wx:key="key"
+            data-key="{{item.key}}" bindtap="onTapTag">{{item.name}}</view>
+
+      <view class="plus-btn" bindtap="togglePlusPanel">{{langPack['order.menuBar.plus']}}</view>
+    </view>
+
+    <!-- [+]面板 -->
+    <view class="plus-panel" wx:if="{{showPlusPanel}}">
+
+      <!-- 更多标签 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.moreTags']}}</view>
+        <view class="tag-grid">
+          <view class="tag-item" wx:for="{{allTags}}" wx:key="key"
+                data-key="{{item.key}}" bindtap="onTapTagInPanel">{{item.name}}</view>
+        </view>
+      </view>
+
+      <!-- 分量控件 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.portionTitle']}}</view>
+        <view class="portion-row" wx:for="{{portionTypes}}" wx:key="key">
+          <text class="portion-name">{{langPack[item.i18nKey]}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="-1" bindtap="onPortionChange">-</button>
+          <text class="portion-val">{{portions[item.key]}}</text>
+          <button size="mini" data-type="{{item.key}}" data-delta="1" bindtap="onPortionChange">+</button>
+        </view>
+      </view>
+
+      <!-- 预算控件 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.budgetTitle']}}</view>
+        <slider min="{{budgetMin}}" max="{{budgetMax}}" step="{{budgetStep}}"
+                value="{{budget}}" bindchange="onBudgetChange" show-value />
+      </view>
+
+      <!-- 忌口管理入口 -->
+      <view class="panel-section">
+        <button size="mini" bindtap="openDietPanel">{{langPack['order.panel.dietEntry']}}</button>
+      </view>
+
+      <!-- 快速/详细切换 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.modeTitle']}}</view>
+        <button size="mini" bindtap="setFast" disabled="{{mode === 'fast'}}">{{langPack['order.panel.modeFast']}}</button>
+        <button size="mini" bindtap="setDeep" disabled="{{mode === 'deep'}}">{{langPack['order.panel.modeDeep']}}</button>
+      </view>
+
+      <!-- 语言选择（旧入口保留） -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.langTitle']}}</view>
+        <view class="lang-bar">
+          <view class="lang-item {{translateLang === 'zh_CN' ? 'active' : ''}}"
+                data-lang="zh_CN" bindtap="onPickLang">{{langPack['order.lang.zhHans']}}</view>
+          <view class="lang-item {{translateLang === 'en_US' ? 'active' : ''}}"
+                data-lang="en_US" bindtap="onPickLang">{{langPack['order.lang.en']}}</view>
+          <view class="lang-item {{translateLang === 'yue' ? 'active' : ''}} {{!yueTtsReady ? 'disabled' : ''}}"
+                data-lang="yue" bindtap="onPickLang">{{langPack['order.lang.yue']}}<text wx:if="{{!yueTtsReady}}" class="badge">{{langPack['order.lang.yueBadge']}}</text></view>
+        </view>
+      </view>
+
+      <!-- 加菜/已有食物输入 -->
+      <view class="panel-section">
+        <view class="panel-title">{{langPack['order.panel.extraTitle']}}</view>
+        <input class="extra-input" value="{{extraInput}}" bindinput="onExtraInput"
+               placeholder="{{langPack['order.panel.extraPlaceholder']}}" />
+        <button size="mini" bindtap="onConfirmExtra">{{langPack['common.add']}}</button>
+      </view>
+
+    </view>
+
+    <!-- 输入栏：可删除小块 -->
+    <view class="chip-box" wx:if="{{chips.length}}">
+      <view class="chip" wx:for="{{chips}}" wx:key="id">
+        <text class="chip-label">{{item.label}}</text>
+        <text class="chip-del" data-id="{{item.id}}" bindtap="onRemoveChip">×</text>
+      </view>
+    </view>
+
+    <!-- 自由输入框 + 麦克风 + 发送 -->
+    <view class="input-row">
+      <view class="mic-btn {{recording ? 'recording' : ''}}"
+            bindtouchstart="onMicStart" bindtouchend="onMicEnd">🎤</view>
+      <input class="user-input" value="{{userInput}}" bindinput="onUserInput"
+             placeholder="{{langPack['order.input.placeholder']}}" />
+      <button class="send-btn" bindtap="onSend" disabled="{{loading}}">
+        {{loading ? langPack['order.input.sending'] : langPack['common.send']}}
+      </button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 屏2：推荐结果卡片 ==================== -->
+  <block wx:if="{{screen === 2}}">
+
+    <view class="stall-box" wx:if="{{stalled}}">
+      <text class="stall-text">{{langPack['order.stall.text']}}</text>
+    </view>
+
+    <view class="result-list">
+      <view class="result-card" wx:for="{{resultCards}}" wx:key="rank">
+        <text class="rc-rank">{{item.rank}}</text>
+        <text class="rc-name">{{item.name}}</text>
+        <text class="rc-score">{{item.score}}</text>
+        <text class="rc-reason">{{item.reason}}</text>
+        <text class="rc-badge" data-badge="{{item.badge}}" bindtap="onTapBadge">{{item.badge}}</text>
+      </view>
+    </view>
+
+    <view class="result-actions">
+      <button class="expand-btn" bindtap="onExpandAnalysis">{{langPack['order.result.expand']}}</button>
+      <button class="speak-btn" bindtap="handleSpeak" disabled="{{speaking}}">🔊</button>
+      <button class="voice-btn" bindtap="openVoicePanel">音色</button>
+    </view>
+
+  </block>
+
+  <!-- ==================== 屏3：完整分析四段 ==================== -->
+  <block wx:if="{{screen === 3}}">
+
+    <view class="analysis">
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.requirements']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.requirements}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.matches']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.matches}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.params']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.params}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="seg">
+        <view class="seg-title">{{langPack['order.analysis.limits']}}</view>
+        <view class="seg-item" wx:for="{{fullAnalysis.limits}}" wx:key="index">{{item}}</view>
+      </view>
+    </view>
+
+    <view class="analysis-actions">
+      <button bindtap="onConfirmAdd">{{langPack['order.analysis.confirmAdd']}}</button>
+      <button bindtap="onRescreen">{{langPack['order.analysis.rescreen']}}</button>
+      <button class="speak-btn" bindtap="handleSpeak" disabled="{{speaking}}">🔊</button>
+    </view>
+
+    <!-- 播报失败兜底文本 -->
+    <view class="tts-fallback" wx:if="{{ttsFallbackText}}">
+      <text>{{ttsFallbackText}}</text>
+    </view>
+
+  </block>
+
+  <!-- ==================== 角标说明弹层 ==================== -->
+  <view class="modal-mask" wx:if="{{showBadgeExplain}}" bindtap="closeBadgeExplain">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-text">{{badgeExplain}}</text>
+      <button size="mini" bindtap="closeBadgeExplain">{{langPack['common.close']}}</button>
+    </view>
+  </view>
+
+  <!-- ==================== 忌口弹层 ==================== -->
+  <view class="modal-mask" wx:if="{{showDietPanel}}" bindtap="closeDietPanel">
+    <view class="modal-box diet-box" catchtap="noop">
+      <view class="modal-title">{{langPack['order.dietPanel.title']}}</view>
+      <view class="diet-list">
+        <view class="diet-item" wx:for="{{dietList}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="onToggleDiet">
+          <text class="diet-check">{{dietProfile[item.key] ? '☑' : '☐'}}</text>
+          <text class="diet-name">{{item.name}}</text>
+        </view>
+      </view>
+      <view class="diet-custom">
+        <input class="diet-input" value="{{dietCustom}}" bindinput="onDietCustomInput"
+               placeholder="{{langPack['order.dietPanel.customPlaceholder']}}" />
+        <button size="mini" bindtap="onAddDietCustom">{{langPack['common.add']}}</button>
+      </view>
+      <button size="mini" bindtap="closeDietPanel">{{langPack['common.done']}}</button>
+    </view>
+  </view>
+
+  <!-- ==================== 音色选择窗（占位，仅"默认音色"） ==================== -->
+  <view class="modal-mask" wx:if="{{showVoicePanel}}" bindtap="closeVoicePanel">
+    <view class="modal-box voice-box" catchtap="noop">
+      <view class="modal-title">音色选择</view>
+      <view class="voice-list">
+        <view class="voice-item active" wx:for="{{voiceOptions}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="onTapVoiceOption">
+          <text class="voice-radio">◉</text>
+          <text class="voice-name">{{item.name}}</text>
+        </view>
+      </view>
+      <button size="mini" bindtap="closeVoicePanel">{{langPack['common.close']}}</button>
+    </view>
+  </view>
+
+</view>
+
+/* FILE: pages/order/order.wxss */
+/* [任务42-第2轮] order页样式：新增语言按钮、麦克风、播报按钮、音色弹层；其余沿用任务39版 */
+.order-page {
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+/* ── [任务42] 语言按钮[简▾] ── */
+.lang-btn {
+  padding: 8rpx 20rpx;
+  border: 1rpx solid #333;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #333;
+}
+
+/* ── 选单栏 ── */
+.menu-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid #eee;
+}
+
+.meal-picker {
+  padding: 8rpx 16rpx;
+  border: 1rpx solid #ccc;
+  border-radius: 8rpx;
+  margin-right: 16rpx;
+}
+
+.chip-inline {
+  padding: 8rpx 16rpx;
+  margin-right: 12rpx;
+  background: #f2f2f2;
+  border-radius: 24rpx;
+  font-size: 26rpx;
+}
+
+.plus-btn {
+  width: 48rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  text-align: center;
+  border: 1rpx dashed #999;
+  border-radius: 50%;
+  color: #666;
+}
+
+/* ── [+]面板 ── */
+.plus-panel {
+  padding: 16rpx;
+  margin: 16rpx 0;
+  background: #fafafa;
+  border: 1rpx solid #eee;
+  border-radius: 8rpx;
+}
+
+.panel-section {
+  margin-bottom: 20rpx;
+}
+
+.panel-title {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 10rpx;
+}
+
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.tag-item {
+  padding: 8rpx 16rpx;
+  margin: 0 12rpx 12rpx 0;
+  background: #fff;
+  border: 1rpx solid #ccc;
+  border-radius: 24rpx;
+  font-size: 26rpx;
+}
+
+/* ── 分量控件 ── */
+.portion-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.portion-name {
+  width: 100rpx;
+}
+
+.portion-val {
+  width: 60rpx;
+  text-align: center;
+}
+
+/* ── 语言 ── */
+.lang-bar {
+  display: flex;
+}
+
+.lang-item {
+  padding: 8rpx 16rpx;
+  margin-right: 12rpx;
+  border: 1rpx solid #ccc;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+}
+
+.lang-item.active {
+  background: #333;
+  color: #fff;
+}
+
+.lang-item.disabled {
+  color: #999;
+  border-color: #e0e0e0;
+}
+
+.badge {
+  font-size: 22rpx;
+  color: #999;
+}
+
+/* ── 加菜输入 ── */
+.extra-input {
+  border: 1rpx solid #ccc;
+  border-radius: 8rpx;
+  padding: 8rpx 12rpx;
+  margin-bottom: 10rpx;
+}
+
+/* ── 输入栏小块 ── */
+.chip-box {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 16rpx 0;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  padding: 6rpx 12rpx;
+  margin: 0 12rpx 12rpx 0;
+  background: #eef;
+  border-radius: 24rpx;
+  font-size: 26rpx;
+}
+
+.chip-del {
+  margin-left: 10rpx;
+  color: #999;
+}
+
+/* ── 自由输入行 ── */
+.input-row {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+/* ── [任务42] 麦克风按钮 ── */
+.mic-btn {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  border: 1rpx solid #ccc;
+  border-radius: 50%;
+  margin-right: 12rpx;
+  font-size: 32rpx;
+}
+
+.mic-btn.recording {
+  background: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+.user-input {
+  flex: 1;
+  border: 1rpx solid #ccc;
+  border-radius: 8rpx;
+  padding: 10rpx 12rpx;
+  margin-right: 12rpx;
+}
+
+.send-btn {
+  font-size: 26rpx;
+}
+
+/* ── 停摆态 ── */
+.stall-box {
+  padding: 16rpx;
+  margin-bottom: 16rpx;
+  background: #fff7e6;
+  border: 1rpx solid #ffd591;
+  border-radius: 8rpx;
+}
+
+.stall-text {
+  color: #ad6800;
+}
+
+/* ── 屏2 结果卡片 ── */
+.result-list {
+  margin: 16rpx 0;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  padding: 16rpx;
+  margin-bottom: 12rpx;
+  border: 1rpx solid #eee;
+  border-radius: 8rpx;
+}
+
+.rc-rank {
+  width: 50rpx;
+  color: #999;
+}
+
+.rc-name {
+  flex: 2;
+  font-weight: bold;
+}
+
+.rc-score {
+  width: 90rpx;
+  text-align: center;
+  color: #666;
+}
+
+.rc-reason {
+  flex: 3;
+  font-size: 24rpx;
+  color: #666;
+  padding: 0 10rpx;
+}
+
+.rc-badge {
+  width: 50rpx;
+  text-align: center;
+  font-size: 32rpx;
+}
+
+/* ── [任务42] 屏2/屏3 操作行 ── */
+.result-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+.expand-btn {
+  flex: 1;
+}
+
+.speak-btn {
+  width: 80rpx;
+  margin-left: 12rpx;
+  font-size: 32rpx;
+}
+
+.voice-btn {
+  width: 100rpx;
+  margin-left: 12rpx;
+  font-size: 24rpx;
+}
+
+/* ── 屏3 完整分析 ── */
+.analysis {
+  margin: 16rpx 0;
+}
+
+.seg {
+  margin-bottom: 20rpx;
+}
+
+.seg-title {
+  font-weight: bold;
+  margin-bottom: 8rpx;
+}
+
+.seg-item {
+  font-size: 26rpx;
+  color: #555;
+  padding: 4rpx 0;
+}
+
+.analysis-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 20rpx;
+}
+
+.analysis-actions button {
+  flex: 1;
+  margin: 0 8rpx;
+}
+
+/* ── [任务42] 播报失败兜底文本 ── */
+.tts-fallback {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: #f7f7f7;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #666;
+}
+
+/* ── 弹层 ── */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-box {
+  width: 80%;
+  max-height: 70%;
+  overflow-y: auto;
+  padding: 24rpx;
+  background: #fff;
+  border-radius: 12rpx;
+}
+
+.modal-title {
+  font-weight: bold;
+  margin-bottom: 16rpx;
+}
+
+.modal-text {
+  display: block;
+  margin-bottom: 16rpx;
+  line-height: 1.6;
+}
+
+/* ── 忌口弹层 ── */
+.diet-list {
+  margin-bottom: 16rpx;
+}
+
+.diet-item {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 0;
+}
+
+.diet-check {
+  width: 40rpx;
+}
+
+.diet-name {
+  font-size: 26rpx;
+}
+
+.diet-custom {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.diet-input {
+  flex: 1;
+  border: 1rpx solid #ccc;
+  border-radius: 8rpx;
+  padding: 8rpx 12rpx;
+  margin-right: 12rpx;
+}
+
+/* ── [任务42] 音色弹层 ── */
+.voice-list {
+  margin-bottom: 16rpx;
+}
+
+.voice-item {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 0;
+}
+
+.voice-radio {
+  width: 40rpx;
+  color: #333;
+}
+
+.voice-name {
+  font-size: 26rpx;
+}
+
+---
+
+**极简改动点列表**
+
+- `pages/order/order.js`：接入 `i18n`/`i18nBehavior`/`opencc`；`behaviors: [i18nBehavior]`；新增 `langBtnText`、`onTapLangBtn`（简→繁→En 循环，`i18n.setLang` 写 storage+广播）、`onLangChanged`；`buildRequirementText` 末尾按界面语言追加输出指令（简体不加/繁体"以繁體中文輸出全部內容"/英文"Respond entirely in English"）；`parseResultCards`/`buildFallbackCards` 展示层过 `opencc.toTraditional` 繁体兜底；新增语音输入 `onMicStart`/`onMicEnd`（`WechatSI.getRecordRecognitionManager`，语种 zh_CN/zh_HK/en_US 跟随界面语言）；播报 `handleSpeak`（简/英走插件 `textToSpeech`，繁体走云函数 `relayTTS`，`error=tts_not_configured` toast"粤语播报即将上线"）；音色占位 `openVoicePanel`/`closeVoicePanel`/`onTapVoiceOption`；文案 toast 改走 `i18n.t`。三屏状态机、推荐链路接线、硬约束逻辑逐字不动。
+- `pages/order/order.wxml`：全部显示文字改 `{{langPack['xxx']}}`；顶部新增语言按钮 `[{{langBtnText}}▾]`；输入行左侧新增麦克风按钮（`bindtouchstart`/`bindtouchend`）；屏2/屏3 新增播报按钮 🔊 与音色按钮；新增音色占位弹层（仅"默认音色"）；角标说明、忌口弹层文案走 langPack。
+- `pages/order/order.wxss`：新增 `.lang-btn`、`.mic-btn`/`.mic-btn.recording`、`.result-actions`/`.speak-btn`/`.voice-btn`、`.tts-fallback`、`.voice-list`/`.voice-item`/`.voice-radio`/`.voice-name`；其余沿用任务39版。
+
+===== Cycle 3 | outcome=direct handoff=False =====
+// FILE: pages/index/index.js
+// [任务42-第3轮] 首页接入 i18n：langPack + i18nBehavior；显示文字走语言包
+// 基座：任务39-第2轮 pages/index/index.js；其余逻辑不动。
+
+const gateway = require('../../common/gateway.js')
+const rec = require('../../common/recommend.js')
+const i18n = require('../../utils/i18n.js')
+const i18nBehavior = require('../../utils/i18nBehavior.js')
+
+Page({
+  behaviors: [i18nBehavior],
+
+  data: {
+    pageTitle: '食知',
+    recentMeals: []
+  },
+
+  onLoad() {
+    this.loadRecentMeals()
+  },
+
+  onShow() {
+    this.loadRecentMeals()
+  },
+
+  // ── 新的一餐 ──
+  startNewMeal() {
+    const mealId = `meal_${Date.now()}`
+    try {
+      const session = rec.createMealSession({ mealId })
+      wx.setStorageSync('pending_meal_session', session)
+    } catch (e) {
+      console.warn('新建mealSession异常', e)
+    }
+    wx.navigateTo({ url: '/pages/order/order?newMeal=1' })
+  },
+
+  // ── 最近餐次列表 ──
+  loadRecentMeals() {
+    const db = wx.cloud.database()
+    db.collection('dish_profile')
+      .orderBy('closedAt', 'desc')
+      .limit(10)
+      .get()
+      .then((res) => {
+        this.setData({ recentMeals: res.data || [] })
+      })
+      .catch((err) => {
+        console.warn('读取最近餐次失败', err)
+        this.setData({ recentMeals: [] })
+      })
+  },
+
+  goMealDetail(e) {
+    const mealId = e.currentTarget.dataset.id
+    wx.navigateTo({ url: `/pages/history/history?mealId=${mealId}` })
+  },
+
+  handleCapture() {
+    wx.chooseImage({
+      count: 1,
+      sourceType: ['camera', 'album'],
+      success: (res) => {
+        const filePath = res.tempFilePaths[0]
+        wx.cloud.uploadFile({
+          cloudPath: `recognize/${Date.now()}.jpg`,
+          filePath,
+          success: () => {
+            wx.navigateTo({ url: '/pages/result/result?mode=recognize' })
+          },
+          fail: (err) => {
+            console.error('上传云存储失败', err)
+          }
+        })
+      }
+    })
+  },
+
+  goResult(e) {
+    const mode = e.currentTarget.dataset.mode
+    wx.navigateTo({ url: `/pages/result/result?mode=${mode}` })
+  }
+})
+
+// FILE: pages/index/index.wxml
+<!-- FILE: pages/index/index.wxml -->
+<!-- [任务42-第3轮] 首页显示文字走 langPack -->
+<view class="page">
+  <text class="page-title">{{langPack['index.pageTitle']}}</text>
+
+  <view class="new-meal-bar">
+    <button bindtap="startNewMeal">{{langPack['order.newMeal']}}</button>
+  </view>
+
+  <view class="primary-action">
+    <button bindtap="handleCapture">{{langPack['index.capture']}}</button>
+  </view>
+
+  <view class="templates">
+    <button bindtap="goResult" data-mode="recognize">{{langPack['index.template.recognize']}}</button>
+    <button bindtap="goResult" data-mode="copy">{{langPack['index.template.copy']}}</button>
+    <button bindtap="goResult" data-mode="nutrition">{{langPack['index.template.nutrition']}}</button>
+  </view>
+
+  <view class="recent-meals">
+    <view class="section-title">{{langPack['index.recentMeals']}}</view>
+    <view wx:if="{{recentMeals.length === 0}}" class="empty">{{langPack['index.recentEmpty']}}</view>
+    <view wx:else class="meal-list">
+      <view class="meal-item" wx:for="{{recentMeals}}" wx:key="mealId"
+            data-id="{{item.mealId}}" bindtap="goMealDetail">
+        <text class="meal-scene">{{item.scene || langPack['index.mealDefaultScene']}}</text>
+        <text class="meal-reqs">{{item.userRequirements}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="chat-entry">
+    <text bindtap="goResult" data-mode="chat">{{langPack['index.chatEntry']}}</text>
+  </view>
+</view>
+
+// FILE: pages/history/history.js
+// [任务42-第3轮] 历史页接入 i18n：langPack + i18nBehavior；只读逻辑不动
+// 基座：任务39-第2轮 pages/history/history.js
+
+const i18n = require('../../utils/i18n.js')
+const i18nBehavior = require('../../utils/i18nBehavior.js')
+
+Page({
+  behaviors: [i18nBehavior],
+
+  data: {
+    pageTitle: '历史记录',
+    records: [],
+    loading: false
+  },
+
+  onLoad() {
+    this.loadRecords()
+  },
+
+  loadRecords() {
+    this.setData({ loading: true })
+    const db = wx.cloud.database()
+    db.collection('dish_profile')
+      .orderBy('closedAt', 'desc')
+      .limit(50)
+      .get()
+      .then((res) => {
+        this.setData({ records: res.data || [], loading: false })
+      })
+      .catch((err) => {
+        console.warn('读取历史记录失败', err)
+        this.setData({ records: [], loading: false })
+      })
+  }
+})
+
+// FILE: pages/history/history.wxml
+<!-- FILE: pages/history/history.wxml -->
+<!-- [任务42-第3轮] 历史页显示文字走 langPack -->
+<view class="page">
+  <text class="page-title">{{langPack['history.pageTitle']}}</text>
+
+  <view wx:if="{{loading}}" class="hint">{{langPack['common.loading']}}</view>
+
+  <view wx:elif="{{records.length === 0}}" class="empty">
+    <text>{{langPack['history.empty']}}</text>
+  </view>
+
+  <view wx:else class="list">
+    <view class="record-item" wx:for="{{records}}" wx:key="mealId">
+      <view class="record-scene">{{item.scene || langPack['history.mealDefaultScene']}}</view>
+      <view class="record-reqs">{{item.userRequirements}}</view>
+      <view class="record-results">{{item.results}}</view>
+    </view>
+  </view>
+</view>
+
+// FILE: pages/profile/profile.js
+// [任务42-第3轮] 我的页接入 i18n：langPack + i18nBehavior；含语言切换入口
+// 基座：任务34原生工程版 pages/profile/profile.js
+
+const i18n = require('../../utils/i18n.js')
+const i18nBehavior = require('../../utils/i18nBehavior.js')
+
+Page({
+  behaviors: [i18nBehavior],
+
+  data: {
+    pageTitle: '我的',
+    bodyData: {
+      height: '',
+      weight: '',
+      allergens: '',
+      goal: ''
+    },
+    // 语言选择项
+    langList: [
+      { key: 'zh-Hans', labelKey: 'order.lang.zhHans' },
+      { key: 'zh-Hant', labelKey: 'order.lang.yue' },
+      { key: 'en', labelKey: 'order.lang.en' }
+    ]
+  },
+
+  goAuth() {
+    wx.showToast({ title: '授权管理', icon: 'none' })
+  },
+
+  // 语言切换（写 storage + 全局广播）
+  onPickLang(e) {
+    const lang = e.currentTarget.dataset.lang
+    i18n.setLang(lang)
+  }
+})
+
+// FILE: app.js
+// [任务42-第3轮] app.js 接入 i18n 初始化：onLaunch 读取 storage 语言并设为当前语言
+// 基座：任务34原生工程版 app.js
+
+const i18n = require('./utils/i18n.js')
+
+App({
+  onLaunch() {
+    // [任务42] i18n 初始化：读取 storage 语言并设为当前语言
+    try {
+      const lang = i18n.getLang()
+      i18n.setLang(lang)
+    } catch (e) {
+      console.warn('i18n 初始化异常', e)
+    }
+
+    if (!wx.cloud) {
+      console.error('请使用 2.2.3 或以上的基础库以使用云能力')
+      return
+    }
+    wx.cloud.init({
+      // ENV_ID：Walter 填写（微信开发者工具 → 云开发 → 环境ID）
+      env: '',
+      traceUser: true
+    })
+  }
+})
+
+// FILE: app.json
+// [任务42-第3轮] app.json：基座=任务38语音剥离版；重新声明微信同声传译插件块（照任务36）
+{
+  "pages": [
+    "pages/index/index",
+    "pages/result/result",
+    "pages/history/history",
+    "pages/profile/profile",
+    "pages/order/order"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "食知",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F7F7F7"
+  },
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
+    }
+  },
+  "cloud": true
+}
+
+// FILE: cloudfunctions/relayTTS/index.js
+// [任务42-第3轮] relayTTS 云函数骨架：腾讯云 TTS（粤语，精品音色，语速1.0）
+// 未配置环境变量 → 返回 { error: "tts_not_configured" }
+// 已配置 → 调腾讯云 TTS 合成并返回 base64 音频数据
+// 密钥走环境变量：TENCENT_TTS_SECRET_ID / TENCENT_TTS_SECRET_KEY（密钥明文不入代码/文档）
+
+const cloud = require('wx-server-sdk')
+const crypto = require('crypto')
+const https = require('https')
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+
+// ── 腾讯云 TTS 配置 ──
+const TTS_HOST = 'tts.tencentcloudapi.com'
+const TTS_SERVICE = 'tts'
+const TTS_VERSION = '2019-08-23'
+const TTS_REGION = 'ap-guangzhou'
+// 粤语音色（精品）：101019 为粤语女声精品音色，实际以腾讯云控制台开通为准
+const YUE_VOICE_TYPE = 101019
+
+// ── 签名辅助（TC3-HMAC-SHA256）──
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(s).digest('hex')
+}
+function hmac256(key, msg) {
+  return crypto.createHmac('sha256', key).update(msg).digest()
+}
+
+function buildAuthorization(secretId, secretKey, payload, timestamp) {
+  const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
+  const credentialScope = `${date}/${TTS_SERVICE}/tc3_request`
+
+  // 1) 拼接规范请求串
+  const httpRequestMethod = 'POST'
+  const canonicalUri = '/'
+  const canonicalQueryString = ''
+  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${TTS_HOST}\n`
+  const signedHeaders = 'content-type;host'
+  const hashedRequestPayload = sha256Hex(payload)
+  const canonicalRequest = [
+    httpRequestMethod,
+    canonicalUri,
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    hashedRequestPayload
+  ].join('\n')
+
+  // 2) 拼接待签名字符串
+  const algorithm = 'TC3-HMAC-SHA256'
+  const hashedCanonicalRequest = sha256Hex(canonicalRequest)
+  const stringToSign = [
+    algorithm,
+    timestamp,
+    credentialScope,
+    hashedCanonicalRequest
+  ].join('\n')
+
+  // 3) 计算签名
+  const secretDate = hmac256('TC3' + secretKey, date)
+  const secretService = hmac256(secretDate, TTS_SERVICE)
+  const secretSigning = hmac256(secretService, 'tc3_request')
+  const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex')
+
+  // 4) 拼接 Authorization
+  return `${algorithm} Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+}
+
+// ── 调腾讯云 TTS ──
+function callTencentTTS(secretId, secretKey, text, lang) {
+  return new Promise((resolve, reject) => {
+    const timestamp = Math.floor(Date.now() / 1000)
+    const body = {
+      Text: text,
+      SessionId: `relay_${Date.now()}`,
+      ModelType: 1,           // 1=基础模型；精品音色用 ModelType 1 + VoiceType 指定
+      VoiceType: YUE_VOICE_TYPE,
+      Codec: 'mp3',
+      SampleRate: 16000,
+      Speed: 1.0,
+      Volume: 0,
+      PrimaryLanguage: 1      // 1=中文
+    }
+    const payload = JSON.stringify(body)
+    const authorization = buildAuthorization(secretId, secretKey, payload, timestamp)
+
+    const options = {
+      hostname: TTS_HOST,
+      method: 'POST',
+      path: '/',
+      headers: {
+        'Authorization': authorization,
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': TTS_HOST,
+        'X-TC-Action': 'TextToVoice',
+        'X-TC-Version': TTS_VERSION,
+        'X-TC-Timestamp': String(timestamp),
+        'X-TC-Region': TTS_REGION
+      }
+    }
+
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data)
+          if (json.Response && json.Response.Error) {
+            reject(new Error(json.Response.Error.Message || 'TTS error'))
+            return
+          }
+          const audioBase64 = json.Response && json.Response.Audio
+          if (!audioBase64) {
+            reject(new Error('no audio in response'))
+            return
+          }
+          resolve(audioBase64)
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
+  })
+}
+
+// ── 入口 ──
+exports.main = async (event) => {
+  const secretId = process.env.TENCENT_TTS_SECRET_ID
+  const secretKey = process.env.TENCENT_TTS_SECRET_KEY
+
+  // 未配置 → 明确返回，前端据此 toast"粤语播报即将上线"
+  if (!secretId || !secretKey) {
+    return { error: 'tts_not_configured' }
+  }
+
+  const text = (event && event.text) || ''
+  const lang = (event && event.lang) || 'yue'
+  if (!text) {
+    return { error: 'empty_text' }
+  }
+
+  try {
+    const audioBase64 = await callTencentTTS(secretId, secretKey, text, lang)
+    // 返回 base64 音频数据（前端可写入临时文件或用 data URL 播放）
+    return { audioBase64, format: 'mp3' }
+  } catch (e) {
+    return { error: 'tts_failed', message: String(e && e.message || e) }
+  }
+}
+
+<!-- FILE: relayTTS部署说明.md -->
+# relayTTS 云函数部署说明
+
+> 用途：为点餐页「粤语播报」提供腾讯云 TTS 语音合成能力。
+> 未配置密钥时，云函数返回 `{ error: "tts_not_configured" }`，前端会提示「粤语播报即将上线」，其余功能不受影响。
+> **安全红线：密钥明文一律不入本文档、不入代码、不入群聊。**
+
+---
+
+## 一、腾讯云 TTS 开通与密钥创建
+
+1. 登录腾讯云控制台（https://console.cloud.tencent.com/）。
+2. 进入「语音合成 TTS」产品页，点击**开通服务**。
+3. 在「资源包管理」领取**免费资源包**（测试期足够用）。
+4. 进入「访问管理 CAM」→「访问密钥」→「API 密钥管理」→ **新建密钥**，得到：
+   - `SecretId`
+   - `SecretKey`
+5. 记录粤语音色 ID（精品音色，如 `101019` 粤语女声），确认已在控制台可用。
+
+> 密钥创建后请妥善保存，仅用于下一步环境变量配置，不要写入任何代码或文档。
+
+---
+
+## 二、云函数部署方法
+
+1. 在微信开发者工具中，确认项目已开通**云开发**并选择环境。
+2. 将本仓库 `cloudfunctions/relayTTS/` 目录纳入云函数目录。
+3. 在 `cloudfunctions/relayTTS/` 下确认存在 `package.json`，依赖包含：
+   - `wx-server-sdk`
+4. 右键 `relayTTS` 目录 → **上传并部署：云端安装依赖**。
+5. 部署完成后，在「云开发控制台 → 云函数 → relayTTS」可看到函数列表。
+
+---
+
+## 三、环境变量配置方法
+
+1. 进入「云开发控制台 → 云函数 → relayTTS → 配置」。
+2. 找到「环境变量」区域，新增两条：
+
+   | 变量名 | 值 |
+   |---|---|
+   | `TENCENT_TTS_SECRET_ID` | 填入你的 SecretId（仅在此处填，勿外传） |
+   | `TENCENT_TTS_SECRET_KEY` | 填入你的 SecretKey（仅在此处填，勿外传） |
+
+3. 保存配置，**重新部署一次**使环境变量生效。
+4. 验证：在云函数测试面板传入 `{ "text": "你好，测试", "lang": "yue" }`，
+   - 若返回 `{ "error": "tts_not_configured" }` → 环境变量未生效，检查变量名拼写与是否重新部署。
+   - 若返回 `{ "audioBase64": "...", "format": "mp3" }` → 配置成功。
+
+---
+
+## 四、前端调用约定
+
+- 云函数名：`relayTTS`
+- 入参：`{ text: string, lang: 'yue' }`
+- 出参：
+  - 成功：`{ audioBase64: string, format: 'mp3' }`
+  - 未配置：`{ error: 'tts_not_configured' }` → 前端 toast「粤语播报即将上线」
+  - 失败：`{ error: 'tts_failed', message: string }` → 前端降级为文本提示
+
+---
+
+## 五、注意事项
+
+- 密钥仅存于云函数环境变量，**严禁**写入 `index.js`、`app.json`、文档或提交到仓库。
+- 若更换密钥，只需在云开发控制台更新环境变量并重新部署，无需改代码。
+- 粤语音色 ID 以腾讯云控制台实际开通为准，如需更换在 `index.js` 的 `YUE_VOICE_TYPE` 调整。
+
+---
+
+**极简改动点列表**
+
+- `pages/index/index.js`：接入 `i18n`/`i18nBehavior`，`behaviors: [i18nBehavior]`；其余逻辑不动。
+- `pages/index/index.wxml`：显示文字改 `{{langPack['index.xxx']}}`，默认场景文案走语言包。
+- `pages/history/history.js`：接入 `i18n`/`i18nBehavior`，`behaviors: [i18nBehavior]`；只读逻辑不动。
+- `pages/history/history.wxml`：显示文字改 `{{langPack['history.xxx']}}`/`{{langPack['common.loading']}}`。
+- `pages/profile/profile.js`：接入 `i18n`/`i18nBehavior`，新增语言切换入口 `onPickLang`（`i18n.setLang` 写 storage+广播）。
+- `app.js`：`onLaunch` 接入 i18n 初始化（读 storage 语言并 `setLang`），云初始化不变。
+- `app.json`：基座=任务38语音剥离版，重新声明 `plugins.WechatSI`（provider `wx069ba97219f66d99`，version `0.3.5`）。
+- `cloudfunctions/relayTTS/index.js`：新建骨架。读环境变量 `TENCENT_TTS_SECRET_ID`/`TENCENT_TTS_SECRET_KEY`，未配置返回 `{error:"tts_not_configured"}`；已配置走 TC3-HMAC-SHA256 签名调腾讯云 TTS（粤语精品音色、语速1.0），返回 `{audioBase64, format:'mp3'}`。
+- `relayTTS部署说明.md`：新建。TTS 开通/密钥创建、云函数部署、环境变量配置、前端调用约定、安全红线；密钥明文不入文档。
+

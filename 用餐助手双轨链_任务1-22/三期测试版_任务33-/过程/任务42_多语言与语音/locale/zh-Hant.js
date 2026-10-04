@@ -18,6 +18,8 @@ module.exports = {
   'order.pageTitle': '點餐助手',
   'order.newMeal': '新的一餐',
   'order.newMealToast': '已開啟新的一餐',
+  // [任务42-2026-10-04二次变更] 語音佔位統一提示：語音輸入/播報按鈕點擊均toast此句
+  'order.voice.soonToast': '語音功能即將上線',
 
   // ── 選單欄（規格 §二）──
   'order.menuBar.mealPrefix': '餐:',

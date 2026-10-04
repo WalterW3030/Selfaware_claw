@@ -19,6 +19,8 @@ module.exports = {
   'order.pageTitle': '点餐助手',
   'order.newMeal': '新的一餐',
   'order.newMealToast': '已开启新的一餐',
+  // [任务42-2026-10-04二次变更] 语音占位统一提示：语音输入/播报按钮点击均toast此句
+  'order.voice.soonToast': '语音功能即将上线',
 
   // ── 选单栏（规格 §二）──
   'order.menuBar.mealPrefix': '餐:',

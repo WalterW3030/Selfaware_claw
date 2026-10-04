@@ -18,6 +18,8 @@ module.exports = {
   'order.pageTitle': 'Order Assistant',
   'order.newMeal': 'New Meal',
   'order.newMealToast': 'New meal started',
+  // [任务42-2026-10-04 2nd change] Unified voice placeholder toast for mic/speak buttons
+  'order.voice.soonToast': 'Voice features coming soon',
 
   // ── 选单栏（规格 §二）──
   'order.menuBar.mealPrefix': 'Meal:',

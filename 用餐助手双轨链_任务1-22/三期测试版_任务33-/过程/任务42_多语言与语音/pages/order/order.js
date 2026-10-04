@@ -2,8 +2,10 @@
 // 依据：《多语言与语音方案.md》v1.0（设计依据）；《点餐页UI规格汇总_任务39输入.md》v1.3定稿（UI规格权威）
 // 基座：任务39版 pages/order/order.js（第2轮改造基座）
 // 红线：三屏状态机、推荐链路接线、硬约束逻辑逐字不动；只改显示层与新增语音交互。
-// 语音（2026-10-04变更）：个人主体小程序不支持微信同声传译插件，插件路线废弃。
-// 语音输入统一走云函数 relayASR（腾讯云一句话识别）；播报统一走云函数 relayTTS。
+// 语音（2026-10-04二次变更）：Walter指令语音降级为占位——语音输入/播报按钮点击统一toast
+// 「语音功能即将上线」（走langPack三语key order.voice.soonToast），不接实际识别/合成调用。
+// 框架保留：relayASR/relayTTS云函数骨架、接口层函数（uploadAndRecognize/speakViaRelayTTS）、
+// 音色选择占位弹层全部保留，框架搭好即可；app.json维持不声明插件（个人主体不可用）。
 
 const { callAI } = require('../../common/gateway.js')
 const rec = require('../../common/recommend.js')
@@ -557,41 +559,18 @@ Page({
   },
 
   // =========================================================================
-  // [任务42] 语音输入：按住说话 → 录音上传云函数 relayASR（腾讯云一句话识别）
+  // [任务42-2026-10-04二次变更] 语音输入按钮=占位：点击toast，不接实际识别
   // =========================================================================
 
   onMicStart() {
-    const lang = i18n.getLang()
-    this.setData({ recording: true })
-
-    // 录制最长10秒 mp3（16k 单声道，腾讯云一句话识别支持）
-    this._recorder = wx.getRecorderManager()
-    this._recorder.onStop = (res) => {
-      this.setData({ recording: false })
-      if (res && res.tempFilePath) {
-        this.uploadAndRecognize(res.tempFilePath, LANG_TO_ASR_ENGINE[lang] || '16k_zh')
-      }
-    }
-    this._recorder.onError = () => {
-      this.setData({ recording: false })
-      wx.showToast({ title: '录音失败，请重试', icon: 'none' })
-    }
-    this._recorder.start({
-      duration: 10000,
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      encodeBitRate: 48000,
-      format: 'mp3'
-    })
+    wx.showToast({ title: i18n.t('order.voice.soonToast'), icon: 'none' })
   },
 
   onMicEnd() {
-    if (!this._recorder) return
-    try {
-      this._recorder.stop()
-    } catch (e) { /* 忽略 */ }
+    // 占位：无录音进行，无需处理
   },
 
+  // ── 接口层函数（框架保留，按钮未接线；配好密钥并接回按钮后即可用）──
   // 上传录音到云存储 → 云函数 relayASR 识别 → 识别文本入输入栏（可编辑）
   uploadAndRecognize(tempFilePath, engine) {
     wx.cloud.uploadFile({
@@ -903,7 +882,7 @@ Page({
   },
 
   // =========================================================================
-  // [任务42] 播报：普通话/英语/粤语统一走云函数 relayTTS（2026-10-04变更）
+  // [任务42-2026-10-04二次变更] 播报按钮=占位：点击toast，不接实际合成
   // =========================================================================
 
   // 取当前界面语言版本的播报文本（屏3完整分析优先，否则用话术）
@@ -922,14 +901,10 @@ Page({
   },
 
   handleSpeak() {
-    const text = this.buildSpeakText()
-    if (!text) {
-      wx.showToast({ title: '暂无可播报内容', icon: 'none' })
-      return
-    }
-    this.speakViaRelayTTS(text, i18n.getLang())
+    wx.showToast({ title: i18n.t('order.voice.soonToast'), icon: 'none' })
   },
 
+  // ── 接口层函数（框架保留，按钮未接线；配好密钥并接回按钮后即可用）──
   // 云函数 relayTTS：未配置密钥返回 error=tts_not_configured，按语言 toast"即将上线"
   speakViaRelayTTS(text, lang) {
     this.setData({ speaking: true })

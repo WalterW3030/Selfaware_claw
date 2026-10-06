@@ -58,7 +58,20 @@ async function callExtend(cfg, messages) {
   // 路由到模型本身正常，400 与模型名无关）。buildThinking 保留备用。
   // const thinking = buildThinking(cfg.thinking)
   // if (thinking) data.thinking = thinking
-  return model.generateText(data)
+  try {
+    return await model.generateText(data)
+  } catch (err) {
+    // 【任务45】诊断增强：带出上游响应体，便于云端排查 400 真实原因
+    let detail
+    if (err && err.response) {
+      detail = `status=${err.response.status} body=${JSON.stringify(err.response.data || {})}`.slice(0, 500)
+    } else {
+      detail = String((err && err.message) || err).slice(0, 500)
+    }
+    const wrapped = new Error(detail)
+    wrapped.originalError = err
+    throw wrapped
+  }
 }
 
 // ── selfhost 通道调用（OpenAI 兼容端点，如百炼/硅基流动）───────────
@@ -115,9 +128,14 @@ function hasNumericLeak(text) {
 // ── 入口 ─────────────────────────────────────────────────────────
 exports.main = async (event) => {
   const { mode, messages } = event || {}
-  const cfg = MODEL_MAP[mode]
+  let cfg = MODEL_MAP[mode]
   if (!cfg) {
     return { error: 'unknown_mode', mode }
+  }
+
+  // 【任务45】event.model 覆盖：非空字符串时，本次调用用 event.model 替换该 mode 的 model（仅本次，不改配置）
+  if (typeof event.model === 'string' && event.model.trim()) {
+    cfg = { ...cfg, model: event.model.trim() }
   }
 
   let res

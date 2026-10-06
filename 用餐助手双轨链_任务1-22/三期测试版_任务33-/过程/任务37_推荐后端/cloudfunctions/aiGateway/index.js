@@ -58,7 +58,7 @@ async function callExtend(cfg, messages) {
   // 路由到模型本身正常，400 与模型名无关）。buildThinking 保留备用。
   // const thinking = buildThinking(cfg.thinking)
   // if (thinking) data.thinking = thinking
-  return model.generateText({ data })
+  return model.generateText(data)
 }
 
 // ── selfhost 通道调用（OpenAI 兼容端点，如百炼/硅基流动）───────────

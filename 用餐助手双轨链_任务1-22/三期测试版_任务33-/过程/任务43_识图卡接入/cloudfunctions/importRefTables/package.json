@@ -1,0 +1,10 @@
+{
+  "name": "importRefTables",
+  "version": "1.0.0",
+  "description": "速查表 + prompt 资产导入云函数（ref_tables / prompt_assets，云存储 md 解析入库）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~4.0.1",
+    "@cloudbase/manager-node": "^5.8.3"
+  }
+}

@@ -472,7 +472,10 @@ async function recognizeImages({ session, userInput, gateway, db } = {}) {
   try {
     const recognizeMessages = [
       { role: 'system', content: recognizePrompt + '\n\n---\n\n初始化块要求：输出须含【识图记录】标记，含图N主题、分区转录清单、符号计数、置信标注与遗漏声明。' },
-      { role: 'user', content: '请识别以下图片：\n' + images.map((img, i) => `[图片${i + 1}]`).join('\n') }
+      { role: 'user', content: [
+        { type: 'text', text: '请识别以下图片，按096卡输出【识图记录】' },
+        ...images.map((img) => ({ type: 'image_url', image_url: { url: img } }))
+      ] }
     ]
     const res = await gateway.invoke({ mode: 'recognize', messages: recognizeMessages })
     const text = extractText(res)

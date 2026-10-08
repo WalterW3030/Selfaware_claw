@@ -143,12 +143,18 @@ exports.main = async (event) => {
   }
 
   const text = (event && event.text) || ''
-  const lang = (event && event.lang) || 'zh-Hans'
   if (!text) {
     return { error: 'empty_text' }
   }
-
-  const voice = VOICE_MAP[lang] || VOICE_MAP['zh-Hans']
+  const lang = event && event.lang
+  if (!lang) {
+    return { error: 'empty_lang', detail: 'lang 必传，支持：' + Object.keys(VOICE_MAP).join(', ') }
+  }
+  // [任务48] 未知语言如实报错（原行为：静默回退普通话音色，调用方无从察觉）
+  const voice = VOICE_MAP[lang]
+  if (!voice) {
+    return { error: 'unknown_lang', detail: 'lang 不支持：' + lang + '；支持：' + Object.keys(VOICE_MAP).join(', ') }
+  }
   try {
     const audioBase64 = await callTencentTTS(secretId, secretKey, text, voice)
     // 返回 base64 音频数据（前端可写入临时文件或用 data URL 播放）

@@ -122,6 +122,7 @@ module.exports = {
   'order.analysis.confirmAdd': 'Add to This Meal',
   'order.analysis.rescreen': 'Re-filter',
   'order.analysis.addedToast': 'Added to this meal',
+  'order.analysis.addFailToast': 'Failed to add, please retry',
 
   // ── 屏3 参数记录条目 ──
   'order.param.meal': 'Meal: {meal}',

@@ -90,6 +90,10 @@ async function callSelfhost(cfg, messages) {
     },
     body: JSON.stringify({ model: cfg.model, messages, stream: false })
   })
+  // [任务48] HTTP 状态如实上报（原行为：直接 .json()，5xx/HTML 错误页被当正常响应透传）
+  if (!resp.ok) {
+    return { error: 'selfhost_http_' + resp.status, detail: 'selfhost 返回 HTTP ' + resp.status }
+  }
   return resp.json()
 }
 
@@ -97,8 +101,12 @@ async function callSelfhost(cfg, messages) {
 async function dispatch(cfg, messages) {
   if (cfg.channel === 'selfhost') {
     if (!selfhostReady()) {
-      // 环境变量缺失时回退 extend，保证主线不被备选通道阻塞
-      return callExtend({ ...cfg, channel: 'extend' }, messages)
+      // [任务48] 环境变量缺失时回退 extend：回退结果如实标注（原行为：静默回退无痕迹，调用方无法区分通道）
+      const r = await callExtend({ ...cfg, channel: 'extend' }, messages)
+      if (r && typeof r === 'object' && !Array.isArray(r)) {
+        try { r._channelNote = 'selfhost_not_configured_fallback_to_extend' } catch (e) {}
+      }
+      return r
     }
     return callSelfhost(cfg, messages)
   }
@@ -106,8 +114,9 @@ async function dispatch(cfg, messages) {
 }
 
 // ── 返回文本提取（兼容多种返回结构，联调以实测为准）────────────────
+// [任务48] 已知结构→文本（可为空串）；未知/缺失结构→null（如实报缺，与合法空文本区分）
 function extractText(res) {
-  if (!res) return ''
+  if (!res) return null
   if (typeof res === 'string') return res
   if (typeof res.text === 'string') return res.text
   if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
@@ -116,7 +125,7 @@ function extractText(res) {
     if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
   }
   if (typeof res.content === 'string') return res.content
-  return ''
+  return null
 }
 
 // ── 红线：营养模式数字泄漏拦截 ────────────────────────────────────
@@ -149,6 +158,10 @@ exports.main = async (event) => {
 
   if (mode === 'nutrition' && !event.allowNumbers) {
     const text = extractText(res)
+    if (text === null) {
+      // [任务48] 结构无法解析=如实报缺（原行为：静默放行，营养闸对未知结构失效）
+      return { error: 'unknown_response_shape', mode, detail: 'nutrition返回结构无法解析（无 choices/message/content/text 字段）' }
+    }
     if (hasNumericLeak(text)) {
       return {
         error: 'numeric_leak_blocked',

@@ -18,8 +18,9 @@ App({
       return
     }
     wx.cloud.init({
-      // ENV_ID：Walter 填写（微信开发者工具 → 云开发 → 环境ID）
-      env: '',
+      // [任务48] 默认取当前环境（SDK 自适应，消除 env:'' 空槽的部署假设）；
+      // 如需固定环境：env: '你的环境ID'（微信开发者工具 → 云开发 → 环境ID）
+      env: wx.cloud.DYNAMIC_CURRENT_ENV,
       traceUser: true
     })
   }

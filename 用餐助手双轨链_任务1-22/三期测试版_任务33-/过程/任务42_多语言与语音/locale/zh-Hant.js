@@ -122,6 +122,7 @@ module.exports = {
   'order.analysis.confirmAdd': '確認加入本餐',
   'order.analysis.rescreen': '重新篩選',
   'order.analysis.addedToast': '已加入本餐',
+  'order.analysis.addFailToast': '加入失敗，請重試',
 
   // ── 屏3 參數記錄條目 ──
   'order.param.meal': '餐次：{meal}',

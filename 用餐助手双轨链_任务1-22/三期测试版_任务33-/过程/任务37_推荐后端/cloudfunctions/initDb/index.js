@@ -92,7 +92,9 @@ exports.main = async () => {
       const manager = CloudBase.init({
         secretId:  process.env.TCB_SECRET_ID,
         secretKey: process.env.TCB_SECRET_KEY,
-        envId:     cloud.DYNAMIC_CURRENT_ENV || process.env.TCB_ENV
+        // [任务48] envId 改走 getWXContext().ENV（TCB_ENV 兜底），与任务47 importRefTables 同法；
+        // 原 cloud.DYNAMIC_CURRENT_ENV 是 wx-server-sdk 魔数占位串，manager-node 不解释，必失败
+        envId:     (cloud.getWXContext && (cloud.getWXContext() || {}).ENV) || process.env.TCB_ENV
       })
       for (const [name, rule] of Object.entries(SECURITY_RULES)) {
         await manager.database.updateCollectionSecurity(name, rule)

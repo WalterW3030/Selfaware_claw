@@ -134,8 +134,15 @@ exports.main = async (event) => {
   }
 
   const fileID = event && event.fileID
-  const engine = (event && event.engine) || '16k_zh'
-  const voiceFormat = (event && event.format) || 'mp3'
+  // [任务48] 引擎/格式白名单校验，缺失或不支持如实报错（原行为：静默缺省 16k_zh/mp3，拼错即替换为假设值）
+  const ASR_ENGINES = ['16k_zh', '16k_yue', '16k_en'] // 腾讯云一句话识别引擎（登记于外部假设清单，待实测）
+  const ASR_FORMATS = ['wav', 'mp3', 'pcm', 'ogg', 'aac', 'm4a']
+  const engine = event && event.engine
+  if (!engine) return { error: 'empty_engine', detail: 'engine 必传，支持：' + ASR_ENGINES.join(', ') }
+  if (ASR_ENGINES.indexOf(engine) < 0) return { error: 'unknown_engine', detail: 'engine 不支持：' + engine + '；支持：' + ASR_ENGINES.join(', ') }
+  const voiceFormat = event && event.format
+  if (!voiceFormat) return { error: 'empty_format', detail: 'format 必传，支持：' + ASR_FORMATS.join(', ') }
+  if (ASR_FORMATS.indexOf(voiceFormat) < 0) return { error: 'unknown_format', detail: 'format 不支持：' + voiceFormat + '；支持：' + ASR_FORMATS.join(', ') }
   if (!fileID) {
     return { error: 'empty_file' }
   }

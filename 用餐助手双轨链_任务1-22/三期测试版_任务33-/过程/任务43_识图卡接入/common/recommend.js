@@ -202,7 +202,11 @@ function selectCard(userInput) {
 
 /** 卡 → 网关功能位 mode */
 function cardToMode(card) {
-  return CARD_TO_MODE[card.id] || 'recommend_deep'
+  if (!card || !card.id) throw new Error('cardToMode: card 为空或无 id')
+  const mode = CARD_TO_MODE[card.id]
+  // [任务48] 未知卡 id 如实报错（原行为：静默回退 recommend_deep，掩盖新增卡接线错误）
+  if (!mode) throw new Error('cardToMode: 未知识图卡 id: ' + card.id)
+  return mode
 }
 
 // ===========================================================================
@@ -429,9 +433,10 @@ function extractUserText(userInput) {
   return ''
 }
 
-/** 兼容多种返回结构的文本提取（联调以实测为准） */
+/** 兼容多种返回结构的文本提取（联调以实测为准）。
+ * [任务48] 已知结构→文本（可为空串）；未知/缺失结构→null（如实报缺，与合法空文本区分）。 */
 function extractText(res) {
-  if (!res) return ''
+  if (!res) return null
   if (typeof res === 'string') return res
   if (typeof res.text === 'string') return res.text
   if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
@@ -440,7 +445,7 @@ function extractText(res) {
     if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
   }
   if (typeof res.content === 'string') return res.content
-  return ''
+  return null
 }
 
 /** 粗略统计识图记录条目数（按非空行计，供日志摘要） */
@@ -450,7 +455,8 @@ function countRecordEntries(text) {
 }
 
 /**
- * 识图前置链：调用 recognize 功能位（aiGateway 既有，model=deepseek-flash，不改网关）。
+ * 识图前置链：调用 recognize 功能位（aiGateway 既有 recognize 位；模型ID以网关 MODEL_MAP 为准，
+ * 任务48已由 deepseek-flash 改为 deepseek-v4-flash，本层不改网关）。
  *  - system prompt = 096 卡全文 + 099 初始化块要求
  *  - user content   = 用户图片（原样透传）
  *  - 失败/异常 → 标记"识图失败"，按信息不足处理（依 096 铁律）
@@ -466,7 +472,11 @@ async function recognizeImages({ session, userInput, gateway, db } = {}) {
   try {
     recognizePrompt = await loadPrompt(db, PROMPT_RECOGNIZE.id)
   } catch (e) {
-    console.log('[识图前置链] 识图卡缺失: ' + e.message)
+    // [任务48] 识图卡缺失=如实报缺：记 failed 并跳过网关调用（原行为：catch 后空 prompt 硬跑，静默降级）
+    record = { failed: true, text: '【识图记录】识图卡缺失：' + (e && e.message ? e.message : String(e)) + '。按信息不足处理。', entries: 0 }
+    session.recognition = record
+    console.log('[识图前置链] 识图卡缺失，跳过识图调用: ' + (e && e.message ? e.message : String(e)))
+    return record
   }
 
   try {
@@ -482,6 +492,9 @@ async function recognizeImages({ session, userInput, gateway, db } = {}) {
 
     if (res && res.error) {
       record = { failed: true, text: '【识图记录】识图调用失败：' + JSON.stringify(res.error) + '。按信息不足处理。', entries: 0 }
+    } else if (text === null) {
+      // [任务48] 结构无法解析与合法空文本区分报缺
+      record = { failed: true, text: '【识图记录】识图返回结构无法解析（无 choices/message/content/text 字段）。按信息不足处理。', entries: 0 }
     } else if (!text) {
       record = { failed: true, text: '【识图记录】识图返回为空。按信息不足处理。', entries: 0 }
     } else {

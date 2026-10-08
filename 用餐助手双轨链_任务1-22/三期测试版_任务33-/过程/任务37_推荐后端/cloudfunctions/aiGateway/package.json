@@ -1,0 +1,9 @@
+{
+  "name": "aiGateway",
+  "version": "1.0.0",
+  "description": "食知AI网关云函数（Kimi/Moonshot 主通道 + 可选 selfhost 备选）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~4.0.1"
+  }
+}

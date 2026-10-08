@@ -1,0 +1,9 @@
+{
+  "name": "relayTTS",
+  "version": "1.0.0",
+  "description": "食知语音合成中继云函数（腾讯云TTS，lang白名单校验）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~4.0.1"
+  }
+}

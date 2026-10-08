@@ -4,6 +4,7 @@
   "description": "食知数据库初始化云函数（集合创建 + 索引 + 基础数据写入）",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~4.0.1"
+    "wx-server-sdk": "~4.0.1",
+    "@cloudbase/manager-node": "^5.8.3"
   }
 }

@@ -108,8 +108,9 @@ const BADGE_I18N_KEY = {
 // 辅助函数
 // ===========================================================================
 
+// [任务48] 已知结构→文本（可为空串）；未知/缺失结构→null（如实报缺，调用方须按 null 处理，不得当合法空文本）
 function extractText(res) {
-  if (!res) return ''
+  if (!res) return null
   if (typeof res === 'string') return res
   if (typeof res.text === 'string') return res.text
   if (Array.isArray(res.choices) && res.choices[0] && res.choices[0].message) {
@@ -118,7 +119,7 @@ function extractText(res) {
     if (Array.isArray(c)) return c.map((p) => p.text || '').join('')
   }
   if (typeof res.content === 'string') return res.content
-  return ''
+  return null
 }
 
 function getTagByKey(key) {
@@ -696,11 +697,18 @@ Page({
       }
     }
 
-    const db = {
-      collection: () => ({
-        where: () => ({ orderBy: () => ({ limit: () => ({ get: () => Promise.resolve({ data: [] }) }) }) }),
-        add: () => Promise.resolve({})
-      })
+    // [任务48] 真实云数据库（原恒空 stub 已废止：该 stub 硬编码"DB恒空"假设，使 loadTables/loadPrompt
+    // 必得空、recommend 必 reject，推荐链永远走停摆兜底——属环境假设混入生产的最严重形态）
+    let db = null
+    try {
+      db = wx.cloud.database()
+    } catch (e) {
+      console.error('云数据库未初始化，无法发起推荐', e)
+    }
+    if (!db) {
+      this.setData({ loading: false })
+      wx.showToast({ title: '云服务未就绪，请重启小程序', icon: 'none' })
+      return
     }
 
     rec.recommend({
@@ -860,10 +868,16 @@ Page({
 
   onConfirmAdd() {
     const mealSession = this.data.mealSession
-    const db = {
-      collection: () => ({
-        add: () => Promise.resolve({})
-      })
+    // [任务48] 真实云数据库（原 no-op stub 已废止：写入静默丢失；且原 catch 弹成功 toast 掩盖失败）
+    let db = null
+    try {
+      db = wx.cloud.database()
+    } catch (e) {
+      console.error('云数据库未初始化，无法写入', e)
+    }
+    if (!db) {
+      wx.showToast({ title: '云服务未就绪，请重启小程序', icon: 'none' })
+      return
     }
     rec.confirmAndPersist(mealSession, db)
       .then(() => {
@@ -871,9 +885,9 @@ Page({
         this.startNewMealSession()
       })
       .catch((err) => {
-        console.warn('入库失败', err)
-        wx.showToast({ title: i18n.t('order.analysis.addedToast'), icon: 'none' })
-        this.startNewMealSession()
+        // [任务48] 失败如实告知（原行为：失败也弹"已加入"）
+        console.error('入库失败', err)
+        wx.showToast({ title: i18n.t('order.analysis.addFailToast'), icon: 'none' })
       })
   },
 

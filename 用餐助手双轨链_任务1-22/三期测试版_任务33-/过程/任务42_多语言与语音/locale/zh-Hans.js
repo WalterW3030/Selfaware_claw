@@ -123,6 +123,7 @@ module.exports = {
   'order.analysis.confirmAdd': '确认加入本餐',
   'order.analysis.rescreen': '重新筛选',
   'order.analysis.addedToast': '已加入本餐',
+  'order.analysis.addFailToast': '加入失败，请重试',
 
   // ── 屏3 参数记录条目 ──
   'order.param.meal': '餐次：{meal}',

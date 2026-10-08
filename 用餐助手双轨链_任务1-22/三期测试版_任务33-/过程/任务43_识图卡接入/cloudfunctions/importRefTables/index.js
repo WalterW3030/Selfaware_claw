@@ -9,6 +9,13 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+// 任务47：manager-node 列目录（云函数内自动读取环境临时凭证，免鉴权）
+const CloudBase = require('@cloudbase/manager-node')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+const manager = CloudBase.init(process.env.TCB_ENV ? { envId: process.env.TCB_ENV } : {})
+
 // 099"将查的表"（默认表）+ 支持度/机制表（按需）
 const EXPECTED_TABLES = [
   { tableNo: '016', title: '口味负荷速查表' },
@@ -59,13 +66,39 @@ async function downloadMd(fileID) {
   }
 }
 
-/** 候选 fileID 列表（速查表）：由调用方传入 / 或按约定目录+表号+扩展名猜测 */
-function candidateFileIDs(tableNo, { dir, providedMap } = {}) {
-  if (providedMap && providedMap[tableNo]) {
-    return Array.isArray(providedMap[tableNo]) ? providedMap[tableNo] : [providedMap[tableNo]]
+// ── 任务47：目录列取 + 文件名模糊匹配（取代固定候选 fileID 逐个试）──────────
+
+/** 列 dir 下所有 .md 文件的对象 Key（manager-node listCurrentDirectory，非递归） */
+async function listDirMdFiles(dir) {
+  const { files } = await manager.storage.listCurrentDirectory(dir)
+  return (files || [])
+    .map((f) => f && f.Key)
+    .filter((k) => typeof k === 'string' && k.toLowerCase().endsWith('.md'))
+}
+
+/**
+ * 文件名含表号即命中，但按非数字边界精确切分：
+ * basename 中每个连续数字段必须完整等于表号（"016" 命中 "016口味负荷速查表.md"，不命中 "0160xx.md"）
+ */
+function fileMatchesTableNo(key, tableNo) {
+  const base = String(key).split('/').pop()
+  const digitRuns = base.match(/\d+/g) || []
+  return digitRuns.includes(tableNo)
+}
+
+/** 按对象 Key 下载 md 文本（downloadFile → /tmp 临时文件）；取不到返回 null（绝不编造） */
+async function downloadMdByKey(key) {
+  const tmp = path.join(os.tmpdir(), `importRef_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.md`)
+  try {
+    await manager.storage.downloadFile({ cloudPath: key, localPath: tmp })
+    if (!fs.existsSync(tmp)) return null
+    const content = fs.readFileSync(tmp, 'utf8')
+    return content || null
+  } catch (e) {
+    return null
+  } finally {
+    try { fs.unlinkSync(tmp) } catch (e) { /* 清理失败忽略 */ }
   }
-  const base = `${dir || DEFAULT_DIR}`
-  return [`${base}/${tableNo}.md`, `${base}/${tableNo}_*.md`]
 }
 
 /** 候选 fileID 列表（prompt 资产）：文件名为固定名，路径 = promptDir/fileName */
@@ -120,19 +153,40 @@ exports.main = async (event = {}) => {
   const providedMap = event.files || null              // { '016': 'cloud://.../016.md', ... }
   const providedPromptMap = event.promptFiles || null  // { 'AGT-0924-w8n-096': 'cloud://.../xxx.md', ... }
 
-  // ══════════════ 速查表导入（逻辑完全不动）══════════════
+  // ══════════════ 速查表导入（任务47：先列目录再按文件名匹配）══════════════
   const imported = []
   const missing = []
 
-  for (const t of EXPECTED_TABLES) {
-    const ids = candidateFileIDs(t.tableNo, { dir, providedMap })
+  // 任务47：一次性列出 dir 下所有 .md；列目录失败保因、不回落旧固定候选路径
+  let dirError = null
+  let dirMdKeys = []
+  try {
+    dirMdKeys = await listDirMdFiles(dir)
+  } catch (e) {
+    dirError = (e && e.message) ? e.message : String(e)
+  }
 
+  for (const t of EXPECTED_TABLES) {
     let md = null
     let usedFile = null
-    for (const id of ids) {
-      if (id.includes('*')) continue        // 通配需文件列表 API，wx-server-sdk 无 → 跳过
-      const got = await downloadMd(id)
-      if (got) { md = got; usedFile = id; break }
+
+    if (providedMap && providedMap[t.tableNo]) {
+      // 调用方显式传入 fileID：直接按 fileID 下载（兼容路径，不变）
+      const ids = Array.isArray(providedMap[t.tableNo]) ? providedMap[t.tableNo] : [providedMap[t.tableNo]]
+      for (const id of ids) {
+        if (typeof id !== 'string' || id.includes('*')) continue
+        const got = await downloadMd(id)
+        if (got) { md = got; usedFile = id; break }
+      }
+    } else if (!dirError) {
+      // 任务47：文件名模糊匹配（非数字边界精确切分），多张命中取字典序第一张
+      const hit = dirMdKeys
+        .filter((k) => fileMatchesTableNo(k, t.tableNo))
+        .sort()[0]
+      if (hit) {
+        const got = await downloadMdByKey(hit)
+        if (got) { md = got; usedFile = hit }
+      }
     }
 
     // —— 铁律：取不到 → 如实报缺，绝不写占位 ——
@@ -189,9 +243,11 @@ exports.main = async (event = {}) => {
   const gapNotes = []
   if (missing.length) gapNotes.push(`速查表：${missing.join('、')}`)
   if (missingPrompts.length) gapNotes.push(`prompt 资产：${missingPrompts.join('、')}`)
+  if (dirError) gapNotes.push(`列目录失败：${dirError}`)
 
   return {
     ok: true,
+    dirError,
     imported,
     missing,
     importedPrompts,

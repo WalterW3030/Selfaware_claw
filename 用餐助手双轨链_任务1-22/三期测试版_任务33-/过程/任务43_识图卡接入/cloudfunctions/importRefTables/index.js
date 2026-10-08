@@ -14,7 +14,16 @@ const CloudBase = require('@cloudbase/manager-node')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const manager = CloudBase.init(process.env.TCB_ENV ? { envId: process.env.TCB_ENV } : {})
+
+/** envId 解析：优先微信云函数运行时上下文 ENV，兜底 TCB_ENV（任务47第二轮细化指令） */
+function resolveEnvId() {
+  try {
+    const ctx = cloud.getWXContext()
+    if (ctx && ctx.ENV) return ctx.ENV
+  } catch (e) { /* 非云函数运行时（如本地）无 wx 上下文 */ }
+  return process.env.TCB_ENV || undefined
+}
+const manager = CloudBase.init(resolveEnvId() ? { envId: resolveEnvId() } : {})
 
 // 099"将查的表"（默认表）+ 支持度/机制表（按需）
 const EXPECTED_TABLES = [
@@ -101,14 +110,12 @@ async function downloadMdByKey(key) {
   }
 }
 
-/** 候选 fileID 列表（prompt 资产）：文件名为固定名，路径 = promptDir/fileName */
-function candidatePromptFileIDs(prompt, { promptDir, providedMap } = {}) {
-  if (providedMap && providedMap[prompt.promptId]) {
-    const v = providedMap[prompt.promptId]
-    return Array.isArray(v) ? v : [v]
-  }
-  const base = `${promptDir || DEFAULT_PROMPT_DIR}`
-  return [`${base}/${prompt.fileName}`]
+/**
+ * 任务47第二轮：prompt 资产文件名精确匹配（basename === EXPECTED_PROMPTS.fileName）
+ * 旧 candidatePromptFileIDs 固定路径构造已退役（相对路径不是合法 fileID，下载必然失败）
+ */
+function promptFileMatches(key, fileName) {
+  return String(key).split('/').pop() === fileName
 }
 
 /** 版本化写入（速查表）：同表号历史保留、仅最新一条 active=true */
@@ -157,13 +164,20 @@ exports.main = async (event = {}) => {
   const imported = []
   const missing = []
 
-  // 任务47：一次性列出 dir 下所有 .md；列目录失败保因、不回落旧固定候选路径
+  // 任务47：一次性列出 ref_tables / prompt_assets 下所有 .md；列目录失败保因、不回落旧固定候选路径
   let dirError = null
   let dirMdKeys = []
   try {
     dirMdKeys = await listDirMdFiles(dir)
   } catch (e) {
     dirError = (e && e.message) ? e.message : String(e)
+  }
+  let promptDirError = null
+  let promptMdKeys = []
+  try {
+    promptMdKeys = await listDirMdFiles(promptDir)
+  } catch (e) {
+    promptDirError = (e && e.message) ? e.message : String(e)
   }
 
   for (const t of EXPECTED_TABLES) {
@@ -206,19 +220,31 @@ exports.main = async (event = {}) => {
     imported.push({ tableNo: t.tableNo, version, from: usedFile })
   }
 
-  // ══════════════ prompt 资产导入（096/097/098/099）══════════════
+  // ══════════════ prompt 资产导入（任务47第二轮：列目录 + fileName 精确匹配）══════════════
   const importedPrompts = []
   const missingPrompts = []
 
   for (const p of EXPECTED_PROMPTS) {
-    const ids = candidatePromptFileIDs(p, { promptDir, providedMap: providedPromptMap })
-
     let md = null
     let usedFile = null
-    for (const id of ids) {
-      if (id.includes('*')) continue        // 守则同上：无文件列表 API，通配跳过
-      const got = await downloadMd(id)
-      if (got) { md = got; usedFile = id; break }
+
+    if (providedPromptMap && providedPromptMap[p.promptId]) {
+      // 调用方显式传入 fileID：直接按 fileID 下载（覆盖通道，保留）
+      const ids = Array.isArray(providedPromptMap[p.promptId]) ? providedPromptMap[p.promptId] : [providedPromptMap[p.promptId]]
+      for (const id of ids) {
+        if (typeof id !== 'string' || id.includes('*')) continue
+        const got = await downloadMd(id)
+        if (got) { md = got; usedFile = id; break }
+      }
+    } else if (!promptDirError) {
+      // 任务47第二轮：basename === fileName 精确匹配，多张命中取字典序第一张
+      const hit = promptMdKeys
+        .filter((k) => promptFileMatches(k, p.fileName))
+        .sort()[0]
+      if (hit) {
+        const got = await downloadMdByKey(hit)
+        if (got) { md = got; usedFile = hit }
+      }
     }
 
     // —— 铁律：取不到 → 进 missing，绝不写占位/编造 ——
@@ -243,11 +269,13 @@ exports.main = async (event = {}) => {
   const gapNotes = []
   if (missing.length) gapNotes.push(`速查表：${missing.join('、')}`)
   if (missingPrompts.length) gapNotes.push(`prompt 资产：${missingPrompts.join('、')}`)
-  if (dirError) gapNotes.push(`列目录失败：${dirError}`)
+  if (dirError) gapNotes.push(`列 ref_tables 目录失败：${dirError}`)
+  if (promptDirError) gapNotes.push(`列 prompt_assets 目录失败：${promptDirError}`)
 
   return {
     ok: true,
     dirError,
+    promptDirError,
     imported,
     missing,
     importedPrompts,

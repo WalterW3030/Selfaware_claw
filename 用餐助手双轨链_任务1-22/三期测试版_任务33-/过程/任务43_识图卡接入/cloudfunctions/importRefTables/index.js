@@ -30,10 +30,10 @@ const EXPECTED_TABLES = [
   { tableNo: '016', title: '口味负荷速查表' },
   { tableNo: '020', title: '场景速查表' },
   { tableNo: '033', title: '稳定性判定' },
-  { tableNo: '051', title: '辣度标注惯例' },
-  { tableNo: '062', title: '通用维度底线' },
-  { tableNo: '058', title: '支持度标注' },
-  { tableNo: '068', title: '支持度标注' },
+  { tableNo: '051', title: '辣度标注惯例',    fileName: '辣度标注惯例_R8.md' },
+  { tableNo: '062', title: '通用维度底线',    fileName: '通用维度底线表_R9.md' },
+  { tableNo: '058', title: '支持度标注',      fileName: '口味搭配方法_R3.md' },
+  { tableNo: '068', title: '支持度标注',      fileName: '情景速查表_R7.md' },
   { tableNo: '017', title: '机制原理' },
   { tableNo: '026', title: '机制原理' }
 ]
@@ -193,10 +193,19 @@ exports.main = async (event = {}) => {
         if (got) { md = got; usedFile = id; break }
       }
     } else if (!dirError) {
-      // 任务47：文件名模糊匹配（非数字边界精确切分），多张命中取字典序第一张
-      const hit = dirMdKeys
-        .filter((k) => fileMatchesTableNo(k, t.tableNo))
-        .sort()[0]
+      // 任务50：显式 fileName 精确匹配优先（R系列文件名不含表号，数字段模糊匹配认不出）；
+      // fileName 无命中 → 数字段模糊匹配兜底（任务47逻辑不变）
+      let hit = null
+      if (t.fileName) {
+        hit = dirMdKeys
+          .filter((k) => String(k).split('/').pop() === t.fileName)
+          .sort()[0]
+      }
+      if (!hit) {
+        hit = dirMdKeys
+          .filter((k) => fileMatchesTableNo(k, t.tableNo))
+          .sort()[0]
+      }
       if (hit) {
         const got = await downloadMdByKey(hit)
         if (got) { md = got; usedFile = hit }

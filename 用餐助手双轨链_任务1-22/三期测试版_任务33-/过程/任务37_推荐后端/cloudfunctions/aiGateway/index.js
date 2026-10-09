@@ -16,23 +16,23 @@ const ai = cloud.ai()
 // 【任务40，2026-09-29】cloudbase通道不支持thinking参数，思考档位仅selfhost通道生效。
 // 各功能位原 thinking 档保留为行内注释说明（设计意图档位），调用时一律不下发。
 const MODEL_MAP = {
-  recognize:  { channel: 'extend', model: 'deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
+  recognize:  { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
   copy:       { channel: 'extend', model: 'hy3'                              },
   nutrition:  { channel: 'extend', model: 'hy3'                              },
-  order_fast: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
-  order_deep: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ },
-  chat:       { channel: 'extend', model: 'deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
+  order_fast: { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'off' — 注释说明位，调用时不下发 */ },
+  order_deep: { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ },
+  chat:       { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
   // ── [任务36] 新增两个功能位：菜单翻译 / 点餐话术生成，均走 hy3、extend 通道 ──
   translate:    { channel: 'extend', model: 'hy3'                              },
   order_phrase: { channel: 'extend', model: 'hy3'                              },
 
   // ── 【任务37】新增：推荐两位（对齐 common/recommend.js 的 cardToMode 映射）──
   // 快速卡080 → recommend_fast：设计意图 low（推理任务禁 off，见详细卡079/快速卡080）
-  recommend_fast: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
+  recommend_fast: { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'low' — 注释说明位，调用时不下发 */ },
   // 详细卡079 → recommend_deep：默认设计意图 medium；复杂个案可上探 'high'
   //   （上探方式：将该行 thinking 临时改 'high' 并恢复下发逻辑，或调用侧显式覆盖；
   //    常规个案保持 medium，勿默认上探以控成本）
-  recommend_deep: { channel: 'extend', model: 'deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ }
+  recommend_deep: { channel: 'extend', model: 'deepseek/deepseek-flash' /* thinking: 'medium' — 注释说明位，调用时不下发 */ }
 }
 
 // ── 思考档位 → API 字段映射 ────────────────────────────────────────
@@ -49,9 +49,20 @@ function selfhostReady() {
 
 // ── extend.AI 通道调用 ────────────────────────────────────────────
 // 图片以 base64 进 messages（前端组装），云函数原样透传，不落盘、不入包。
+// 【任务51，2026-10-09】model 归一化（Walter 指令）：不带 "/" 且以 deepseek 开头的值，
+// 调用 extend 前自动补 "deepseek/" provider 前缀（Walter 实测控制台实名 deepseek/deepseek-flash，
+// 防旧写法侧漏再触发 400）。hy3、已带前缀等其余值原样透传；selfhost 通道不归一化（端点命名自理）。
+function normalizeDeepseekModel(model) {
+  if (typeof model === 'string' && model.indexOf('/') < 0 && /^deepseek/i.test(model)) {
+    return 'deepseek/' + model
+  }
+  return model
+}
+
 async function callExtend(cfg, messages) {
-  const model = ai.createModel('cloudbase')
-  const data = { model: cfg.model, messages }
+  const modelId = normalizeDeepseekModel(cfg.model)
+  const client = ai.createModel('cloudbase')
+  const data = { model: modelId, messages }
   // 【任务40，2026-09-29】cloudbase通道不支持thinking参数，思考档位仅selfhost通道生效。
   // 以下两行原 thinking 注入已注释：往 generateText 的 data 里塞 thinking 字段
   // 会被 CloudBase 模型接口拒绝（云端实测 mode=chat 返回 400；429 阶段已验证
@@ -59,7 +70,7 @@ async function callExtend(cfg, messages) {
   // const thinking = buildThinking(cfg.thinking)
   // if (thinking) data.thinking = thinking
   try {
-    return await model.generateText(data)
+    return await client.generateText(data)
   } catch (err) {
     // 【任务45】诊断增强：带出上游响应体，便于云端排查 400 真实原因
     let detail

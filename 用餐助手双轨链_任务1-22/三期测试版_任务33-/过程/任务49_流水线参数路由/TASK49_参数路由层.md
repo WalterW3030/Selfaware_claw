@@ -51,5 +51,6 @@
 ## 四、QC 记录
 
 - `python3 -m py_compile k2p6_pipeline_v2_核查.py` 通过。
-- 负向用例 `tests/test_routing.py`：9/9 PASS（见测试文件头注释）。
+- 负向用例 `tests/test_routing.py`：**17/17 PASS**（缺type/未知type/参数未声明/precheck拒绝四道报缺门 + 三档payload组装 + 干跑端到端）。
+- CLI 冒烟：缺 `--type` 时 argparse 拒绝运行并打印有效清单（exit 2）。
 - 诚实声明：路由拒绝路径与 payload 组装均本地验证；真实 API 联通未实测（需 DEEPSEEK_API_KEY，云侧 200 待实测）。

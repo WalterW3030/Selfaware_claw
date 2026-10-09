@@ -456,7 +456,7 @@ function countRecordEntries(text) {
 
 /**
  * 识图前置链：调用 recognize 功能位（aiGateway 既有 recognize 位；模型ID以网关 MODEL_MAP 为准，
- * 任务48已由 deepseek-flash 改为 deepseek-v4-flash，本层不改网关）。
+ * 本层不改网关）。
  *  - system prompt = 096 卡全文 + 099 初始化块要求
  *  - user content   = 用户图片（原样透传）
  *  - 失败/异常 → 标记"识图失败"，按信息不足处理（依 096 铁律）

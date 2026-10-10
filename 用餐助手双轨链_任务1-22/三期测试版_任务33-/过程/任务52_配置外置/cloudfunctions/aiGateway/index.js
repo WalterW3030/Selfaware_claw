@@ -3,14 +3,14 @@
 // 通道：extend（extend.AI 托管，默认）/ selfhost（自备 OpenAI 兼容端点，环境变量存在才启用）。
 // 依赖：wx-server-sdk >= 4.0.1（cloud.ai() 需此版本起）
 //
-// 任务52配置外置：可配置项已移至 cloudfunctions/shared/assets.config.js
+// 任务52配置外置：可配置项已移至 ./assets.config.js（清单部署副本，随本函数目录上传；母本 cloudfunctions/shared/assets.config.js）
 //   MODEL_MAP 与通道默认值改从清单读；清单加载自检不通过 → 报错拒绝执行，列出全部缺项，绝不猜默认值。
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const ai = cloud.ai()
 
 // ── 清单加载（任务52：可配置项外置）────────────────────────────────
-const assetsConfig = require('../shared/assets.config.js')
+const assetsConfig = require('./assets.config.js')
 const MODEL_MAP = assetsConfig.MODEL_MAP
 const DEFAULT_CHANNEL = assetsConfig.DEFAULT_CHANNEL
 

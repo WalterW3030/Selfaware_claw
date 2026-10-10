@@ -119,13 +119,14 @@ function loadConfig(configPath) {
 }
 
 // ── 工具：加载"改造版脚本"，其 require 的清单被重定向到 configPath ──
-// 通过 Module._load 拦截 '../shared/assets.config.js' 的相对请求，
+// 通过 Module._load 拦截脚本发出的清单请求（'./assets.config.js'，部署副本路径），
 // 命中时改从 configPath 加载（仅测试期重定向，不改仓库脚本）。
+// 兼容说明：拦截按 /assets\.config(\.js)?$/ 匹配请求名，不区分 './' 与 '../' 前缀。
 function loadScriptWithConfig(scriptPath, configPath) {
   const scriptAbs = path.resolve(scriptPath)
   const orig = Module._load
   Module._load = function (request, parent, isMain) {
-    // 脚本内 require('../shared/assets.config.js')：parent.filename 为脚本路径
+    // 脚本内 require('./assets.config.js')：parent.filename 为脚本路径
     if (/assets\.config(\.js)?$/.test(request) && parent && parent.filename) {
       // 仅当发起方是本脚本时重定向
       if (path.resolve(parent.filename) === scriptAbs) {

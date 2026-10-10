@@ -2,7 +2,7 @@
 // 依据：推荐系统结构设计v1.0 §U2；初始化prompt099"将查的表"集合；
 //       识图卡096 / 详细卡097 / 快速卡098 / 初始化prompt099（prompt_assets 资产）
 //
-// 任务52配置外置：可配置项已移至 cloudfunctions/shared/assets.config.js
+// 任务52配置外置：可配置项已移至 ./assets.config.js（清单部署副本，随本函数目录上传；母本 cloudfunctions/shared/assets.config.js）
 //   EXPECTED_TABLES / EXPECTED_PROMPTS 改从清单读；清单加载自检不通过 → 报缺拒绝执行。
 //
 // 铁律（对齐"表/资产文件缺失时导入器如实报缺不编造"口径）：
@@ -19,7 +19,7 @@ const os = require('os')
 const path = require('path')
 
 // ── 清单加载（任务52：可配置项外置）────────────────────────────────
-const assetsConfig = require('../shared/assets.config.js')
+const assetsConfig = require('./assets.config.js')
 const EXPECTED_TABLES = assetsConfig.EXPECTED_TABLES
 const EXPECTED_PROMPTS = assetsConfig.EXPECTED_PROMPTS
 const DEFAULT_DIR = assetsConfig.DEFAULT_DIR

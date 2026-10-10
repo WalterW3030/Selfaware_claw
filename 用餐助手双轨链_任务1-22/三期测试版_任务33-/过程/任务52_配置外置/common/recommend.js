@@ -4,7 +4,7 @@
 //       / 初始化prompt099（文档4）/ 路由头v2（文档5）/ aiGateway原文（文档6）
 //       / 识图卡096（图像信息识别前置，文档7）
 //
-// 任务52配置外置：可配置项已移至 cloudfunctions/shared/assets.config.js
+// 任务52配置外置：可配置项已移至 ./assets.config.js（清单部署副本，置于 miniprogram/common/ 同目录；母本 cloudfunctions/shared/assets.config.js）
 //   PROMPT_INIT/CARD_DEEP/CARD_FAST/PROMPT_RECOGNIZE 四个常量改从清单 PROMPT_BINDINGS 角色绑定读取；
 //   清单缺对应卡 → 报错列出缺项，不猜默认。
 //
@@ -26,7 +26,7 @@
 'use strict'
 
 // ── 清单加载（任务52：可配置项外置）────────────────────────────────
-const assetsConfig = require('../shared/assets.config.js')
+const assetsConfig = require('./assets.config.js')
 
 // 清单自检：不通过则拒绝执行（错误信息列出全部缺项，绝不猜默认值）
 const _cfgCheck = assetsConfig.checkConfig()

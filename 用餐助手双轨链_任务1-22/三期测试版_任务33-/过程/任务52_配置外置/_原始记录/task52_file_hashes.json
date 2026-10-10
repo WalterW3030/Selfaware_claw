@@ -1,0 +1,8 @@
+{
+ "cloudfunctions/aiGateway/index.js": "db958e4efabbbc77bd79311ddd598f4270d02c385f262eac568b0e730f67e010",
+ "cloudfunctions/importRefTables/index.js": "46f0b298c148c57179d2b215c95afa6235e4e734973111843434d0f0dd37f07b",
+ "cloudfunctions/shared/assets.config.js": "288247348e008b949761c42b549e2834814d1771a2d86fa8e33736a46c8171be",
+ "common/recommend.js": "4b1f58b6ef1d0d3674e4474288fa4071659231924e78c9642e03c12d71b1d644",
+ "tests/assets_config_negative_tests.js": "0555ec72362f77ea1a2830d34111d82179fa623213ebbe1900d0d1ce0a747c91",
+ "配置变更操作说明.md": "0a6662a7917b2c9daa6f364e2be46b0e278ac0d66700ad567f6a86e247ff117c"
+}

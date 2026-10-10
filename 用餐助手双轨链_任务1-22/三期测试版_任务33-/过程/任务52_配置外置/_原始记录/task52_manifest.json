@@ -1,0 +1,27 @@
+[
+ {
+  "path": "<executor_declaration>",
+  "bytes": 371,
+  "sha256": "00b55368b6726ba2bdd90b21cf24ddfb1050881d2de89aa3a786accf2903f8c1"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务37_推荐后端/cloudfunctions/aiGateway/index.js",
+  "bytes": 10052,
+  "sha256": "18f338c3dc7b82f0916efebed6a587b403163cc242d9fe77064813cb81d969a3"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务43_识图卡接入/cloudfunctions/importRefTables/index.js",
+  "bytes": 12533,
+  "sha256": "9d3971fbc8616f2e91abf452f86d0540b030dd5ffe15b53ed840b4da854674e3"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务43_识图卡接入/common/recommend.js",
+  "bytes": 25855,
+  "sha256": "982bdb9c9b74c020559ee7c1f2737a15c9d00a73afcfd46e89a57e0417809e0d"
+ },
+ {
+  "path": "/root/Selfaware_claw/用餐助手双轨链_任务1-22/三期测试版_任务33-/过程/任务48_硬编码假设普查/审计报告.md",
+  "bytes": 11620,
+  "sha256": "b84ff1ee015ac52673e0333c36c35ca1a755898ebfd39bc54323125dde7eb0bb"
+ }
+]

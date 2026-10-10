@@ -1,0 +1,302 @@
+[
+ {
+  "item": "文件齐套6件（盘上）",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[recognize]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[order_fast]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[order_deep]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[chat]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[recommend_fast]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP含[recommend_deep]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单MODEL_MAP六位model全deepseek/deepseek-flash",
+  "pass": true,
+  "detail": "6"
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[016]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[020]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[033]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[051]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[062]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[058]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[068]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[017]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_TABLES含表[026]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含精确fileName[辣度标注惯例_R8.md]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含精确fileName[通用维度底线表_R9.md]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含精确fileName[口味搭配方法_R3.md]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含精确fileName[情景速查表_R7.md]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_PROMPTS含[AGT-0924-w8n-096]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_PROMPTS含[AGT-0924-w8n-097]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_PROMPTS含[AGT-0924-w8n-098]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单EXPECTED_PROMPTS含[AGT-0924-w8n-099]",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含PROMPT_BINDINGS四角色",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含通道默认值",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "清单含自检/报缺逻辑(含角色绑定校验)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway改require清单",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway本地MODEL_MAP硬编码已移除",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway保留normalizeDeepseekModel",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway保留event.model单次覆盖",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway保留callExtend错误透传",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway清单缺件报缺拒绝(不猜默认)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "aiGateway经变量访问MODEL_MAP（mode名动态查清单）",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables从清单读表/prompt",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables本地EXPECTED_TABLES硬编码已移除",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables保留精确fileName优先",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables保留数字段模糊兜底",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables保留listCurrentDirectory列目录",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables保留envId解析(getWXContext)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables保留event.files/promptFiles覆盖",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "importRefTables报缺不编造",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js从清单读卡id(PROMPT_BINDINGS)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js本地四常量硬编码已移除",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js无AGT卡id字面量残留",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js保留八态状态机",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js保留识图前置链",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js保留规则层硬过滤",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "recommend.js报缺不猜默认",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "grep零残留:aiGateway无硬编码模型名(非注释行)",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "item": "grep零残留:importRefTables无硬编码表文件名(非注释行)",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "item": "grep零残留:recommend.js无硬编码卡id/文件名(非注释行)",
+  "pass": true,
+  "detail": "[]"
+ },
+ {
+  "item": "说明文档含换模型/加速查表/换prompt卡三变更+部署注意+报缺说明",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/shared/assets.config.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/aiGateway/index.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "cloudfunctions/importRefTables/index.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "common/recommend.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "tests/assets_config_negative_tests.js语法检查(node --check)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "item": "负向单测全部PASS",
+  "pass": true,
+  "detail": "js 缺 PROMPT_BINDINGS.PROMPT_RECOGNIZE → 加载即 throw，点名该角色\n\n— ② 改名不命中不误配 —\n  PASS  ②a 表文件改名（051→乱名）→ 051 进 missing，不误配到其他表\n\n— ③ 模糊兜底优先级 —\n  PASS  ③ 051 同时存在\"精确名\"与\"含051数字段\"两文件 → 选精确 fileName\n\n10/10 PASS"
+ }
+]

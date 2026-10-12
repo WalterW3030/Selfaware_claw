@@ -86,6 +86,15 @@ const DEFAULT_CHANNEL = 'extend'          // 默认托管通道
 const DEFAULT_DIR = 'ref_tables'          // 速查表云存储约定目录
 const DEFAULT_PROMPT_DIR = 'prompt_assets' // prompt 资产云存储约定目录
 
+// ── ⑤ 云环境 ID（任务53新增）────────────────────────────────────
+// 用途：importRefTables 的 manager-node 列目录/下载需要 envId；云端实测存在
+//       getWXContext().ENV 与 TCB_ENV 均拿不到的环境（裸 manager.init({}) 报
+//       [DescribeEnvInfo] EnvId is required），故清单显式兜底。
+// 取值：Walter 云环境 ID（从其云存储文件完整路径 cloud://cloud1-d6giun5fd1af7fe74.636c-… 实证）。
+// 语义：非空字符串 → resolveEnvId 第一优先；空字符串/空白 → 自动降级走运行时
+//       上下文与 TCB_ENV，不阻断执行（本项不入 checkConfig 必填）。
+const ENV_ID = 'cloud1-d6giun5fd1af7fe74'
+
 // ── 清单自检函数 ─────────────────────────────────────────────────
 // 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项 / EXPECTED_PROMPTS 四项。
 // 通过 → { ok: true, missing: [] }
@@ -154,5 +163,6 @@ module.exports = {
   DEFAULT_CHANNEL,
   DEFAULT_DIR,
   DEFAULT_PROMPT_DIR,
+  ENV_ID,
   checkConfig
 }

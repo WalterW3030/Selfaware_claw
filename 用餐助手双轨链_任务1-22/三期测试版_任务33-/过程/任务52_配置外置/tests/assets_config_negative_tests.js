@@ -9,6 +9,7 @@
 //   - 覆盖：①清单缺项报缺（MODEL_MAP/EXPECTED_TABLES/EXPECTED_PROMPTS 各一）
 //           ②改名不命中不误配（精确 fileName 不中 + 数字段模糊不中 → 报缺）
 //           ③模糊兜底优先级（精确 fileName 与数字段模糊同时可命中 → 选精确 fileName）
+//           ④ENV_ID 环境ID兜底优先级（任务53：清单>wxContext>TCB_ENV>undefined）
 //   - 结束打印 "n/m PASS"。
 
 'use strict'
@@ -450,6 +451,124 @@ check('③ 051 同时存在"精确名"与"含051数字段"两文件 → 选精�
     assert.ok(String(rec.from).indexOf('051干扰文件') < 0,
       '051 不得选中数字段模糊命中的干扰文件')
   })
+})
+
+// ═══════════════════════════════════════════════════════════════
+// ④ ENV_ID 环境ID兜底优先级（任务53）：清单 ENV_ID > getWXContext().ENV > TCB_ENV > undefined
+// ═══════════════════════════════════════════════════════════════
+console.log('\n— ④ ENV_ID 环境ID兜底优先级（任务53） —')
+
+// 工具：改写清单 ENV_ID 取值（传字符串替换右值；undefined=删整行模拟旧版清单）
+function setEnvId(src, value) {
+  if (value === undefined) {
+    return src.replace(/^const ENV_ID = .*$/m, '')
+  }
+  return src.replace(/^const ENV_ID = .*$/m, 'const ENV_ID = ' + JSON.stringify(value))
+}
+
+// 工具：同步加载 importRefTables，捕获 CloudBase.init 实参；wx 上下文与 TCB_ENV 可控。
+// wxCtx 传 { __throw: true } 模拟无 wx 上下文（getWXContext 抛错）。
+function loadImportCaptureInit(configMutate, wxCtx, tcbEnv) {
+  const p = makeConfigCopy(configMutate)
+  const scriptAbs = path.join(ROOT, 'cloudfunctions', 'importRefTables', 'index.js')
+  const hadTcb = Object.prototype.hasOwnProperty.call(process.env, 'TCB_ENV')
+  const oldTcb = process.env.TCB_ENV
+  if (tcbEnv === undefined) delete process.env.TCB_ENV
+  else process.env.TCB_ENV = tcbEnv
+
+  const orig = Module._load
+  let capturedInit = null
+  Module._load = function (request, parent, isMain) {
+    if (/assets\.config(\.js)?$/.test(request) && parent && parent.filename &&
+        path.resolve(parent.filename) === scriptAbs) {
+      const abs = path.resolve(p)
+      delete require.cache[require.resolve(abs)]
+      return require(abs)
+    }
+    if (request === '@cloudbase/manager-node') {
+      return {
+        init(arg) {
+          capturedInit = arg
+          return {
+            storage: {
+              listCurrentDirectory() { return Promise.resolve({ files: [] }) },
+              downloadFile() { return Promise.resolve({}) }
+            }
+          }
+        }
+      }
+    }
+    if (request === 'wx-server-sdk') {
+      return {
+        init() {},
+        DYNAMIC_CURRENT_ENV: 'x',
+        getWXContext() {
+          if (wxCtx && wxCtx.__throw) throw new Error('no wx context')
+          return wxCtx
+        },
+        database() {
+          return { collection() { return {
+            where() { return this }, orderBy() { return this }, limit() { return this },
+            get() { return Promise.resolve({ data: [] }) },
+            update() { return Promise.resolve({}) },
+            add() { return Promise.resolve({}) },
+            doc() { return { update() { return Promise.resolve({}) } } }
+          } } }
+        },
+        downloadFile() { return Promise.resolve({ fileContent: Buffer.from('') }) },
+        ai() { return { createModel() { return { generateText() { return Promise.resolve({ text: '' }) } } } } }
+      }
+    }
+    return orig.apply(this, arguments)
+  }
+  try { delete require.cache[require.resolve(scriptAbs)] } catch (e) {}
+  let loadErr = null
+  try { require(scriptAbs) } catch (e) { loadErr = e }
+  Module._load = orig
+  if (hadTcb) process.env.TCB_ENV = oldTcb
+  else delete process.env.TCB_ENV
+  return { err: loadErr, initArg: capturedInit }
+}
+
+// ④-a 清单 ENV_ID 非空 → 第一优先（wx 上下文与 TCB_ENV 同时存在也被压过）
+check('④a 清单 ENV_ID 非空 → init 收到清单值（压过 wxContext/TCB_ENV）', () => {
+  const r = loadImportCaptureInit(null, { ENV: 'ctx-env-should-lose' }, 'tcb-env-should-lose')
+  assert.strictEqual(r.err, null, '加载不应报错：' + (r.err && r.err.message))
+  assert.deepStrictEqual(r.initArg, { envId: 'cloud1-d6giun5fd1af7fe74' },
+    'init 实参应为清单 ENV_ID，实得：' + JSON.stringify(r.initArg))
+})
+
+// ④-b 清空 ENV_ID → 降级走 getWXContext().ENV
+// （验收负向口径：清空 ENV_ID 时仍能走 context 兜底）
+check('④b 清空 ENV_ID → init 收到 wxContext.ENV', () => {
+  const r = loadImportCaptureInit((s) => setEnvId(s, ''), { ENV: 'ctx-env-4b' }, 'tcb-env-4b')
+  assert.strictEqual(r.err, null, '加载不应报错：' + (r.err && r.err.message))
+  assert.deepStrictEqual(r.initArg, { envId: 'ctx-env-4b' },
+    'init 实参应为 wxContext.ENV，实得：' + JSON.stringify(r.initArg))
+})
+
+// ④-c 纯空白 ENV_ID → 视为空，同样走 wxContext
+check('④c 纯空白 ENV_ID → 视为空，init 收到 wxContext.ENV', () => {
+  const r = loadImportCaptureInit((s) => setEnvId(s, '   '), { ENV: 'ctx-env-4c' }, undefined)
+  assert.strictEqual(r.err, null, '加载不应报错：' + (r.err && r.err.message))
+  assert.deepStrictEqual(r.initArg, { envId: 'ctx-env-4c' },
+    'init 实参应为 wxContext.ENV，实得：' + JSON.stringify(r.initArg))
+})
+
+// ④-d 清空 ENV_ID + wxContext 无 ENV → 走 TCB_ENV
+check('④d 清空 ENV_ID 且 wxContext 无 ENV → init 收到 TCB_ENV', () => {
+  const r = loadImportCaptureInit((s) => setEnvId(s, ''), {}, 'tcb-env-4d')
+  assert.strictEqual(r.err, null, '加载不应报错：' + (r.err && r.err.message))
+  assert.deepStrictEqual(r.initArg, { envId: 'tcb-env-4d' },
+    'init 实参应为 TCB_ENV，实得：' + JSON.stringify(r.initArg))
+})
+
+// ④-e 全空 → init 收到 {}（裸初始化；列目录失败由 dirError 保因如实上报）
+check('④e 清单空 + 无 wx 上下文 + 无 TCB_ENV → init 收到 {}（dirError 保因）', () => {
+  const r = loadImportCaptureInit((s) => setEnvId(s, ''), { __throw: true }, undefined)
+  assert.strictEqual(r.err, null, '加载不应报错：' + (r.err && r.err.message))
+  assert.deepStrictEqual(r.initArg, {},
+    'init 实参应为空对象（裸 init），实得：' + JSON.stringify(r.initArg))
 })
 
 // ── 收尾 ─────────────────────────────────────────────────────────

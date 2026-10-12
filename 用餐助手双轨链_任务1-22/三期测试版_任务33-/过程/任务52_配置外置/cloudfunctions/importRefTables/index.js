@@ -24,9 +24,18 @@ const EXPECTED_TABLES = assetsConfig.EXPECTED_TABLES
 const EXPECTED_PROMPTS = assetsConfig.EXPECTED_PROMPTS
 const DEFAULT_DIR = assetsConfig.DEFAULT_DIR
 const DEFAULT_PROMPT_DIR = assetsConfig.DEFAULT_PROMPT_DIR
+const ENV_ID = assetsConfig.ENV_ID
 
-/** envId 解析：优先微信云函数运行时上下文 ENV，兜底 TCB_ENV（任务47第二轮细化指令） */
+/**
+ * envId 解析（任务53优先级裁决）：
+ *   ① 清单 ENV_ID 非空 → 第一优先（云端实测存在 getWXContext().ENV 与 TCB_ENV
+ *      均拿不到的环境，裸 manager.init({}) 报 [DescribeEnvInfo] EnvId is required）
+ *   ② 微信云函数运行时上下文 getWXContext().ENV（任务47第二轮细化指令）
+ *   ③ TCB_ENV 环境变量兜底
+ *   ④ 全空 → undefined（CloudBase.init({}) 裸初始化；列目录失败时 dirError 如实保因）
+ */
 function resolveEnvId() {
+  if (typeof ENV_ID === 'string' && ENV_ID.trim() !== '') return ENV_ID
   try {
     const ctx = cloud.getWXContext()
     if (ctx && ctx.ENV) return ctx.ENV

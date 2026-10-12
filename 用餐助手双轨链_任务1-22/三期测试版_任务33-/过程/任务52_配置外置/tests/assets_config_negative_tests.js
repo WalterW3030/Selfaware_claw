@@ -10,6 +10,7 @@
 //           ②改名不命中不误配（精确 fileName 不中 + 数字段模糊不中 → 报缺）
 //           ③模糊兜底优先级（精确 fileName 与数字段模糊同时可命中 → 选精确 fileName）
 //           ④ENV_ID 环境ID兜底优先级（任务53：清单>wxContext>TCB_ENV>undefined）
+//           ⑤chat位角色注入（任务54：注入system含"食知"/缺PERSONA拒绝点名/空白拒绝/非chat不注入）
 //   - 结束打印 "n/m PASS"。
 
 'use strict'
@@ -571,13 +572,120 @@ check('④e 清单空 + 无 wx 上下文 + 无 TCB_ENV → init 收到 {}（dirE
     'init 实参应为空对象（裸 init），实得：' + JSON.stringify(r.initArg))
 })
 
+// ═══════════════════════════════════════════════════════════════
+// ⑤ chat 位角色注入（任务54）：注入 system / 缺 PERSONA 拒绝点名 / 非 chat 不注入
+// ═══════════════════════════════════════════════════════════════
+console.log('\n— ⑤ chat 位角色注入（任务54） —')
+
+// 工具：异步用例登记。async 自执行 IIFE——fn 的同步前缀（写清单副本/加载模块）
+// 立即执行，只有 main() 调用挂起；避免收尾先删临时目录导致 ENOENT。
+const pendingAsync = []
+function checkAsync(name, fn) {
+  total++
+  pendingAsync.push((async () => { await fn() })().then(
+    () => { passed++; console.log('  PASS  ' + name) },
+    (e) => { console.log('  FAIL  ' + name + '  →  ' + (e && e.message ? e.message : e)) }
+  ))
+}
+
+// 工具：加载 aiGateway，清单重定向到改写副本；捕获 extend 通道实际发出的 messages。
+// 通道默认 extend（清单 MODEL_MAP 全 extend），generateText 替身捕获 data.messages。
+function loadGatewayWithConfig(configMutate) {
+  const p = makeConfigCopy(configMutate)
+  const scriptAbs = path.join(ROOT, 'cloudfunctions', 'aiGateway', 'index.js')
+  const orig = Module._load
+  let capturedMessages = null
+  Module._load = function (request, parent, isMain) {
+    if (/assets\.config(\.js)?$/.test(request) && parent && parent.filename &&
+        path.resolve(parent.filename) === scriptAbs) {
+      const abs = path.resolve(p)
+      delete require.cache[require.resolve(abs)]
+      return require(abs)
+    }
+    if (request === 'wx-server-sdk') {
+      return {
+        init() {},
+        DYNAMIC_CURRENT_ENV: 'x',
+        ai() {
+          return {
+            createModel() {
+              return {
+                generateText(data) {
+                  capturedMessages = (data && data.messages) || null
+                  return Promise.resolve({ text: 'stub-ok' })
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return orig.apply(this, arguments)
+  }
+  try { delete require.cache[require.resolve(scriptAbs)] } catch (e) {}
+  let mod = null, loadErr = null
+  try { mod = require(scriptAbs) } catch (e) { loadErr = e }
+  Module._load = orig
+  return { mod, loadErr, getCaptured: () => capturedMessages }
+}
+
+// ⑤-a chat 位注入：messages[0]=system 且含"食知"，且调用方原数组不被改动
+checkAsync('⑤a chat 注入 system（messages[0]=system 含"食知"，原数组不变）', async () => {
+  const g = loadGatewayWithConfig(null)
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const original = [{ role: 'user', content: '你是谁' }]
+  const ret = await g.mod.main({ mode: 'chat', messages: original })
+  assert.ok(ret && !ret.error, 'chat 调用不应返回错误：' + JSON.stringify(ret))
+  const sent = g.getCaptured()
+  assert.ok(Array.isArray(sent), '应捕获到实际发出的 messages')
+  assert.strictEqual(sent.length, 2, '注入后应为 2 条消息，实得 ' + sent.length)
+  assert.strictEqual(sent[0].role, 'system', 'messages[0] 应为 system，实得：' + sent[0].role)
+  assert.ok(String(sent[0].content).indexOf('食知') >= 0,
+    'system 内容应含"食知"，实得：' + sent[0].content)
+  assert.strictEqual(original.length, 1, '调用方原 messages 不应被改动（长度应为 1）')
+})
+
+// ⑤-b 清单 PERSONA={}（缺 chat_system 键）→ chat 拒绝并点名
+checkAsync('⑤b 清单 PERSONA={}（缺 chat_system）→ chat 拒绝并点名', async () => {
+  const g = loadGatewayWithConfig((s) => s.replace(/const PERSONA = \{[\s\S]*?\n\}/, 'const PERSONA = {}'))
+  assert.strictEqual(g.loadErr, null,
+    '缺 PERSONA 键时 aiGateway 加载不应报错（自检不含 PERSONA）：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '你是谁' }] })
+  assert.ok(ret && ret.error, 'chat 调用应被拒绝返回 error，实得：' + JSON.stringify(ret))
+  const msg = JSON.stringify(ret)
+  assert.ok(msg.indexOf('PERSONA.chat_system') >= 0, '拒绝信息应点名 PERSONA.chat_system，实得：' + msg)
+  assert.ok(msg.indexOf('缺') >= 0, '拒绝信息应含"缺"，实得：' + msg)
+})
+
+// ⑤-c chat_system 空白 → 同样拒绝并点名（空白视同缺）
+checkAsync('⑤c chat_system 空白 → chat 拒绝并点名', async () => {
+  const g = loadGatewayWithConfig((s) => s.replace(/chat_system: '[^']*'/, "chat_system: ''"))
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '你是谁' }] })
+  assert.ok(ret && ret.error, 'chat 调用应被拒绝返回 error，实得：' + JSON.stringify(ret))
+  const msg = JSON.stringify(ret)
+  assert.ok(msg.indexOf('PERSONA.chat_system') >= 0, '拒绝信息应点名 PERSONA.chat_system，实得：' + msg)
+})
+
+// ⑤-d 非 chat 位（recognize）不注入 system
+checkAsync('⑤d 非 chat 位（recognize）不注入 system', async () => {
+  const g = loadGatewayWithConfig(null)
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'recognize', messages: [{ role: 'user', content: '图片文字识别' }] })
+  assert.ok(ret && !ret.error, 'recognize 调用不应返回错误：' + JSON.stringify(ret))
+  const sent = g.getCaptured()
+  assert.ok(Array.isArray(sent), '应捕获到实际发出的 messages')
+  assert.strictEqual(sent.length, 1, 'recognize 消息数应保持 1，实得 ' + sent.length)
+  assert.strictEqual(sent[0].role, 'user', 'recognize 不应注入 system（messages[0] 应为 user），实得：' + sent[0].role)
+})
+
 // ── 收尾 ─────────────────────────────────────────────────────────
 uninstallStub()
 try { fs.rmSync(TMP, { recursive: true, force: true }) } catch (e) { /* 清理忽略 */ }
 
-// 说明：含 async 的用例以 Promise 触发断言，此处给出同步可判定的汇总。
-// 为对 async 用例给出一致口径，额外等待一个 tick 后打印计数。
-setTimeout(() => {
+// 汇总：等待 ⑤ 组登记的异步用例全部落定后打印计数。
+// （①f/②/③ 的 async 用例沿用同步计数口径，见文件头说明；本汇总对 ⑤ 起全量可判。）
+Promise.all(pendingAsync).then(() => {
   console.log('\n' + passed + '/' + total + ' PASS\n')
   if (passed !== total) process.exitCode = 1
-}, 50)
+})

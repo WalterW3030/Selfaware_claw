@@ -13,6 +13,7 @@ const ai = cloud.ai()
 const assetsConfig = require('./assets.config.js')
 const MODEL_MAP = assetsConfig.MODEL_MAP
 const DEFAULT_CHANNEL = assetsConfig.DEFAULT_CHANNEL
+const PERSONA = assetsConfig.PERSONA
 
 // 清单自检：不通过则拒绝执行（错误信息列出全部缺项，绝不猜默认值）
 const _cfgCheck = assetsConfig.checkConfig()
@@ -140,6 +141,26 @@ exports.main = async (event) => {
     return { error: 'unknown_mode', mode }
   }
 
+  // 【任务54】chat 位角色定位注入（Walter 指令）：mode==='chat' 时 messages 头部插
+  // system（PERSONA.chat_system 唯一来源 = 清单，本脚本零人设字面量）。
+  // PERSONA/chat_system 缺失或空白 → 按群规则拒绝本次调用并点名缺项（只拒 chat 位，
+  // 不拖垮其他 mode）。新数组注入，不改调用方原 messages。
+  let msgs = messages
+  if (mode === 'chat') {
+    const personaText = (PERSONA && typeof PERSONA.chat_system === 'string')
+      ? PERSONA.chat_system.trim()
+      : ''
+    if (!personaText) {
+      return {
+        error: 'assets_config_missing',
+        mode,
+        note: 'assets.config.js 清单缺 PERSONA.chat_system（chat位角色定位），拒绝本次调用；缺项：PERSONA.chat_system'
+      }
+    }
+    msgs = [{ role: 'system', content: PERSONA.chat_system }]
+      .concat(Array.isArray(messages) ? messages : [])
+  }
+
   // 【任务45】event.model 覆盖：非空字符串时，本次调用用 event.model 替换该 mode 的 model（仅本次，不改配置）
   if (typeof event.model === 'string' && event.model.trim()) {
     cfg = { ...cfg, model: event.model.trim() }
@@ -147,7 +168,7 @@ exports.main = async (event) => {
 
   let res
   try {
-    res = await dispatch(cfg, messages)
+    res = await dispatch(cfg, msgs)
   } catch (err) {
     return { error: 'upstream_error', mode, detail: String((err && err.message) || err) }
   }

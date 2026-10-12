@@ -95,6 +95,16 @@ const DEFAULT_PROMPT_DIR = 'prompt_assets' // prompt 资产云存储约定目录
 //       上下文与 TCB_ENV，不阻断执行（本项不入 checkConfig 必填）。
 const ENV_ID = 'cloud1-d6giun5fd1af7fe74'
 
+// ── ⑥ PERSONA 角色定位（任务54新增）────────────────────────────
+// 用途：aiGateway 的 mode==='chat' 在 messages 头部注入 system 角色定位
+//       （Walter 实测 mode=chat 问自我介绍，模型答 deepseek——chat 位原样透传无角色注入）。
+// 铁律：chat_system 非空 → 注入；缺失/空白 → 按群规则拒绝本次 chat 调用并点名缺项
+//       （只拒 chat 位，不拖垮其他 mode，故不入 checkConfig 全局必填）。
+// 长度：全文 ≤ 80 字。换人设 = 改本处一处，四处副本同步。
+const PERSONA = {
+  chat_system: '你是食知小程序的用餐助手，由Walter团队开发，帮用户记录每餐、看懂搭配，按速查表给点餐建议。'
+}
+
 // ── 清单自检函数 ─────────────────────────────────────────────────
 // 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项 / EXPECTED_PROMPTS 四项。
 // 通过 → { ok: true, missing: [] }
@@ -164,5 +174,6 @@ module.exports = {
   DEFAULT_DIR,
   DEFAULT_PROMPT_DIR,
   ENV_ID,
+  PERSONA,
   checkConfig
 }

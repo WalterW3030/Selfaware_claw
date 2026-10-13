@@ -35,51 +35,56 @@ const REQUIRED_MODES = [
   'chat', 'recommend_fast', 'recommend_deep'
 ]
 
-// ── ② EXPECTED_TABLES 九项（取值与 importRefTables 现状逐字一致）──────
-// 匹配顺序：精确 fileName（basename === fileName，大小写敏感）优先
-//           → 无则数字段模糊匹配兜底（fileMatchesTableNo，非数字边界精确切分）
-//           → 再不中如实报缺并列出缺项（不编造）。
-// 051/062/058/068 带精确 fileName（R 系列文件名不含表号，数字段模糊匹配认不出）；
-// 016/020/033/017/026 无 fileName，按数字段模糊匹配兜底。
+// ── ② EXPECTED_TABLES 九项（任务55：各加 nameSeg 固定名称段，编号不参与匹配）──
+// 匹配规则（任务55改造，importRefTables）：basename 是否包含 nameSeg 判定命中，编号完全不参与。
+// 多文件命中同名段 → 不猜，进 missing 并注明"多命中歧义"+命中列表。
+// nameSeg 逐字取自 Walter 卡链指令（2026-10-13），017/026 映射锚=部署台账.md
+// 第35行（Good2Eat prompts/ 实际文件名：味相互作用原理_017、机制原理手册_026）。
+// fileName 字段保留为来源登记（任务50 R系列精确名），不再参与匹配。
 const EXPECTED_TABLES = [
-  { tableNo: '016', title: '口味负荷速查表' },
-  { tableNo: '020', title: '场景速查表' },
-  { tableNo: '033', title: '稳定性判定' },
-  { tableNo: '051', title: '辣度标注惯例', fileName: '辣度标注惯例_R8.md' },
-  { tableNo: '062', title: '通用维度底线', fileName: '通用维度底线表_R9.md' },
-  { tableNo: '058', title: '口味搭配方法', fileName: '口味搭配方法_R3.md' },
-  { tableNo: '068', title: '情景速查表',   fileName: '情景速查表_R7.md' },
-  { tableNo: '017', title: '机制原理' },
-  { tableNo: '026', title: '机制原理' }
+  { tableNo: '016', title: '口味负荷速查表', nameSeg: '口味负荷速查表' },
+  { tableNo: '020', title: '场景速查表',     nameSeg: '场景速查表' },
+  { tableNo: '033', title: '稳定性判定',     nameSeg: '菜品稳定性判定' },
+  { tableNo: '051', title: '辣度标注惯例',   nameSeg: '辣度标注惯例',   fileName: '辣度标注惯例_R8.md' },
+  { tableNo: '062', title: '通用维度底线',   nameSeg: '通用维度底线表', fileName: '通用维度底线表_R9.md' },
+  { tableNo: '058', title: '口味搭配方法',   nameSeg: '口味搭配方法',   fileName: '口味搭配方法_R3.md' },
+  { tableNo: '068', title: '情景速查表',     nameSeg: '情景速查表',     fileName: '情景速查表_R7.md' },
+  { tableNo: '017', title: '机制原理',       nameSeg: '味相互作用原理' },
+  { tableNo: '026', title: '机制原理',       nameSeg: '机制原理手册' }
 ]
 
 // EXPECTED_TABLES 必备项数（自检基准）
 const REQUIRED_TABLE_COUNT = 9
 
-// ── ③ EXPECTED_PROMPTS 四项（取值与 importRefTables 现状逐字一致）────
-// 匹配顺序：basename === fileName 精确匹配（大小写敏感），多张命中取字典序第一张。
+// ── ③ EXPECTED_PROMPTS 五项（任务55：卡链108-112，各含 nameSeg 固定名称段）──
+// 匹配规则（任务55改造，importRefTables）：basename 是否包含 nameSeg 判定命中，编号不参与。
+// fileName = 附件送达原始文件名逐字（upd1-5.md，Walter 卡链指令 2026-10-13）；
+// 卡标题 nameSeg 逐字取自五卡 H1（结论/执行卡_108-112/ 副本 SHA 与附件一致）。
 // 云存储默认目录 prompt_assets。
 const EXPECTED_PROMPTS = [
-  { promptId: 'AGT-0924-w8n-096', title: '识图任务执行卡',            fileName: '识图任务执行卡-AGT-0924-w8n-096.md' },
-  { promptId: 'AGT-0924-w8n-097', title: '详细推荐执行卡',            fileName: '详细推荐执行卡-AGT-0924-w8n-097.md' },
-  { promptId: 'AGT-0924-w8n-098', title: '快速推荐执行卡',            fileName: '快速推荐执行卡-AGT-0924-w8n-098.md' },
-  { promptId: 'AGT-0924-w8n-099', title: '饮食推荐agent初始化prompt', fileName: '饮食推荐agent初始化prompt-AGT-0924-w8n-099.md' }
+  { promptId: 'AGT-0924-w8n-108', title: '详细推荐执行卡',            nameSeg: '详细推荐执行卡',            fileName: 'upd5.md' },
+  { promptId: 'AGT-0924-w8n-109', title: '快速推荐执行卡',            nameSeg: '快速推荐执行卡',            fileName: 'upd4.md' },
+  { promptId: 'AGT-0924-w8n-110', title: '识图任务执行卡',            nameSeg: '识图任务执行卡',            fileName: 'upd3.md' },
+  { promptId: 'AGT-0924-w8n-111', title: '饮食百科任务执行卡',        nameSeg: '饮食百科任务执行卡',        fileName: 'upd2.md' },
+  { promptId: 'AGT-0924-w8n-112', title: '饮食推荐agent初始化prompt', nameSeg: '饮食推荐agent初始化prompt', fileName: 'upd1.md' }
 ]
 
 // EXPECTED_PROMPTS 必备项数（自检基准）
-const REQUIRED_PROMPT_COUNT = 4
+const REQUIRED_PROMPT_COUNT = 5
 
-// ── ③b PROMPT_BINDINGS：角色 → promptId（recommend.js 四常量改从本绑定读）──
-// 换卡 = 改本处指向的 promptId + EXPECTED_PROMPTS 对应行 fileName，recommend.js 一行不动。
+// ── ③b PROMPT_BINDINGS：角色 → promptId（recommend.js 常量改从本绑定读）──
+// 换卡 = 改本处指向的 promptId + EXPECTED_PROMPTS 对应行，recommend.js 一行不动。
+// 任务55新链：INIT=112 / DEEP=108（默认）/ FAST=109（显式"快速"）/ RECOGNIZE=110（图像前置）/ WIKI=111（百科记录分析）
 const PROMPT_BINDINGS = {
-  PROMPT_INIT:      'AGT-0924-w8n-099', // 每轮初始化 prompt
-  CARD_DEEP:        'AGT-0924-w8n-097', // 详细卡（默认，新链尾）
-  CARD_FAST:        'AGT-0924-w8n-098', // 快速卡（仅显式"快速"）
-  PROMPT_RECOGNIZE: 'AGT-0924-w8n-096'  // 识图任务卡（图像前置）
+  PROMPT_INIT:      'AGT-0924-w8n-112', // 每轮初始化 prompt
+  CARD_DEEP:        'AGT-0924-w8n-108', // 详细卡（默认卡）
+  CARD_FAST:        'AGT-0924-w8n-109', // 快速卡（仅显式"快速"）
+  PROMPT_RECOGNIZE: 'AGT-0924-w8n-110', // 识图任务卡（图像前置，先行）
+  CARD_WIKI:        'AGT-0924-w8n-111'  // 百科任务卡（记录/分析/为什么搭，无快速模式）
 }
 
 // PROMPT_BINDINGS 必备角色（自检基准）
-const REQUIRED_PROMPT_ROLES = ['PROMPT_INIT', 'CARD_DEEP', 'CARD_FAST', 'PROMPT_RECOGNIZE']
+const REQUIRED_PROMPT_ROLES = ['PROMPT_INIT', 'CARD_DEEP', 'CARD_FAST', 'PROMPT_RECOGNIZE', 'CARD_WIKI']
 
 // ── ④ 通道默认值 ─────────────────────────────────────────────────
 const DEFAULT_CHANNEL = 'extend'          // 默认托管通道
@@ -106,7 +111,7 @@ const PERSONA = {
 }
 
 // ── 清单自检函数 ─────────────────────────────────────────────────
-// 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项 / EXPECTED_PROMPTS 四项。
+// 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项（含 nameSeg）/ EXPECTED_PROMPTS 五项（含 nameSeg）。
 // 通过 → { ok: true, missing: [] }
 // 不通过 → { ok: false, missing: [...] }（列出全部缺项，供调用方报错拒绝执行）
 function checkConfig() {
@@ -131,6 +136,10 @@ function checkConfig() {
     EXPECTED_TABLES.forEach((t, i) => {
       if (!t || !t.tableNo) missing.push(`EXPECTED_TABLES[${i}].tableNo`)
       if (!t || !t.title)   missing.push(`EXPECTED_TABLES[${i}].title`)
+      // 任务55：nameSeg 为命中匹配的唯一依据，缺失即报缺（不猜默认段）
+      if (!t || typeof t.nameSeg !== 'string' || t.nameSeg.trim() === '') {
+        missing.push(`EXPECTED_TABLES[${i}].nameSeg`)
+      }
     })
   }
 
@@ -143,6 +152,10 @@ function checkConfig() {
       if (!p || !p.promptId) missing.push(`EXPECTED_PROMPTS[${i}].promptId`)
       if (!p || !p.title)    missing.push(`EXPECTED_PROMPTS[${i}].title`)
       if (!p || !p.fileName) missing.push(`EXPECTED_PROMPTS[${i}].fileName`)
+      // 任务55：nameSeg 为命中匹配的唯一依据，缺失即报缺（不猜默认段）
+      if (!p || typeof p.nameSeg !== 'string' || p.nameSeg.trim() === '') {
+        missing.push(`EXPECTED_PROMPTS[${i}].nameSeg`)
+      }
     })
   }
 

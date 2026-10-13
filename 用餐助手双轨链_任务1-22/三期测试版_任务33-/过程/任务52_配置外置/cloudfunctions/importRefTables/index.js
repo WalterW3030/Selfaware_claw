@@ -1,9 +1,13 @@
 // 【新增】速查表 + prompt 资产导入脚本：从云存储 md 文件解析入 ref_tables / prompt_assets
-// 依据：推荐系统结构设计v1.0 §U2；初始化prompt099"将查的表"集合；
-//       识图卡096 / 详细卡097 / 快速卡098 / 初始化prompt099（prompt_assets 资产）
+// 依据：推荐系统结构设计v1.0 §U2；任务55卡链108-112（识图110/详细108/快速109/百科111/初始化112）；
+//       卡链108-112"将查的表"集合（016/020/033/051/058-062/068 中已导入九项）
 //
 // 任务52配置外置：可配置项已移至 ./assets.config.js（清单部署副本，随本函数目录上传；母本 cloudfunctions/shared/assets.config.js）
 //   EXPECTED_TABLES / EXPECTED_PROMPTS 改从清单读；清单加载自检不通过 → 报缺拒绝执行。
+//
+// 任务55匹配机制：按固定名称段（nameSeg）匹配文件，编号完全不参与；
+//   同一名称段多文件命中 → 不猜，进 missing 并注明"多命中歧义"+命中文件列表。
+//   （取代任务47数字段模糊匹配与任务50精确文件名优先两级逻辑。）
 //
 // 铁律（对齐"表/资产文件缺失时导入器如实报缺不编造"口径）：
 //   - 只导入真实取到的云存储文件；取不到 → 进 missing，绝不写占位/编造内容
@@ -78,13 +82,24 @@ async function listDirMdFiles(dir) {
 }
 
 /**
- * 文件名含表号即命中，但按非数字边界精确切分：
- * basename 中每个连续数字段必须完整等于表号（"016" 命中 "016口味负荷速查表.md"，不命中 "0160xx.md"）
+ * 任务55：固定名称段匹配（编号完全不参与），取代任务47数字段模糊匹配与任务50精确文件名优先。
+ * basename（去目录）包含 nameSeg 即候选命中；nameSeg 非空由清单自检保证
+ * （checkConfig 已拦 nameSeg 缺失/空白，到不了这里）。
  */
-function fileMatchesTableNo(key, tableNo) {
+function fileMatchesNameSeg(key, nameSeg) {
   const base = String(key).split('/').pop()
-  const digitRuns = base.match(/\d+/g) || []
-  return digitRuns.includes(tableNo)
+  return typeof nameSeg === 'string' && nameSeg.length > 0 && base.includes(nameSeg)
+}
+
+/**
+ * 任务55：在 keys 中取 nameSeg 唯一命中。
+ * 0 命中 → { hit: null, hits: [] }；1 命中 → { hit, hits }；
+ * ≥2 命中 → { hit: null, hits, ambiguous: true }（不猜，由调用方报"多命中歧义"）。
+ */
+function resolveUniqueNameSegHit(keys, nameSeg) {
+  const hits = keys.filter((k) => fileMatchesNameSeg(k, nameSeg)).sort()
+  if (hits.length === 1) return { hit: hits[0], hits }
+  return { hit: null, hits, ambiguous: hits.length > 1 }
 }
 
 /** 按对象 Key 下载 md 文本（downloadFile → /tmp 临时文件）；取不到返回 null（绝不编造） */
@@ -102,13 +117,9 @@ async function downloadMdByKey(key) {
   }
 }
 
-/**
- * 任务47第二轮：prompt 资产文件名精确匹配（basename === EXPECTED_PROMPTS.fileName）
- * 旧 candidatePromptFileIDs 固定路径构造已退役（相对路径不是合法 fileID，下载必然失败）
- */
-function promptFileMatches(key, fileName) {
-  return String(key).split('/').pop() === fileName
-}
+// 【任务55退役说明】prompt 资产 basename === fileName 精确匹配已退役（编号/精确文件名均不再参与匹配），
+// 旧 candidatePromptFileIDs 固定路径构造更早退役（相对路径不是合法 fileID，下载必然失败）。
+// 现役匹配见 fileMatchesNameSeg。
 
 /** 版本化写入（速查表）：同表号历史保留、仅最新一条 active=true */
 async function upsertTable(rec) {
@@ -160,11 +171,12 @@ exports.main = async (event = {}) => {
   const dir = event.dir || DEFAULT_DIR
   const promptDir = event.promptDir || DEFAULT_PROMPT_DIR
   const providedMap = event.files || null              // { '016': 'cloud://.../016.md', ... }
-  const providedPromptMap = event.promptFiles || null  // { 'AGT-0924-w8n-096': 'cloud://.../xxx.md', ... }
+  const providedPromptMap = event.promptFiles || null  // { 'AGT-0924-w8n-108': 'cloud://.../xxx.md', ... }（示例形状，编号不参与匹配）
 
-  // ══════════════ 速查表导入（任务47：先列目录再按文件名匹配）══════════════
+  // ══════════════ 速查表导入（任务55：basename 含 nameSeg 命中，编号不参与）══════════════
   const imported = []
   const missing = []
+  const ambiguousTables = []   // 任务55：多命中歧义登记（表）
 
   // 任务47：一次性列出 ref_tables / prompt_assets 下所有 .md；列目录失败保因、不回落旧固定候选路径
   let dirError = null
@@ -195,22 +207,17 @@ exports.main = async (event = {}) => {
         if (got) { md = got; usedFile = id; break }
       }
     } else if (!dirError) {
-      // 任务50：显式 fileName 精确匹配优先（R系列文件名不含表号，数字段模糊匹配认不出）；
-      // fileName 无命中 → 数字段模糊匹配兜底（任务47逻辑不变）
-      let hit = null
-      if (t.fileName) {
-        hit = dirMdKeys
-          .filter((k) => String(k).split('/').pop() === t.fileName)
-          .sort()[0]
+      // 任务55：basename 含 nameSeg 判定命中（编号完全不参与）；
+      // 唯一命中→下载；多命中→不猜，进 missing 并登记"多命中歧义"+命中文件列表
+      const r = resolveUniqueNameSegHit(dirMdKeys, t.nameSeg)
+      if (r.ambiguous) {
+        ambiguousTables.push({ tableNo: t.tableNo, nameSeg: t.nameSeg, hits: r.hits })
+        missing.push(t.tableNo)
+        continue
       }
-      if (!hit) {
-        hit = dirMdKeys
-          .filter((k) => fileMatchesTableNo(k, t.tableNo))
-          .sort()[0]
-      }
-      if (hit) {
-        const got = await downloadMdByKey(hit)
-        if (got) { md = got; usedFile = hit }
+      if (r.hit) {
+        const got = await downloadMdByKey(r.hit)
+        if (got) { md = got; usedFile = r.hit }
       }
     }
 
@@ -231,9 +238,10 @@ exports.main = async (event = {}) => {
     imported.push({ tableNo: t.tableNo, version, from: usedFile })
   }
 
-  // ══════════════ prompt 资产导入（任务47第二轮：列目录 + fileName 精确匹配）══════════════
+  // ══════════════ prompt 资产导入（任务55：basename 含 nameSeg 命中，编号不参与）══════════════
   const importedPrompts = []
   const missingPrompts = []
+  const ambiguousPrompts = []   // 任务55：多命中歧义登记（prompt 资产）
 
   for (const p of EXPECTED_PROMPTS) {
     let md = null
@@ -248,13 +256,17 @@ exports.main = async (event = {}) => {
         if (got) { md = got; usedFile = id; break }
       }
     } else if (!promptDirError) {
-      // 任务47第二轮：basename === fileName 精确匹配，多张命中取字典序第一张
-      const hit = promptMdKeys
-        .filter((k) => promptFileMatches(k, p.fileName))
-        .sort()[0]
-      if (hit) {
-        const got = await downloadMdByKey(hit)
-        if (got) { md = got; usedFile = hit }
+      // 任务55：basename 含 nameSeg 判定命中（编号完全不参与）；
+      // 唯一命中→下载；多命中→不猜，进 missingPrompts 并登记"多命中歧义"+命中文件列表
+      const r = resolveUniqueNameSegHit(promptMdKeys, p.nameSeg)
+      if (r.ambiguous) {
+        ambiguousPrompts.push({ promptId: p.promptId, nameSeg: p.nameSeg, hits: r.hits })
+        missingPrompts.push(p.promptId)
+        continue
+      }
+      if (r.hit) {
+        const got = await downloadMdByKey(r.hit)
+        if (got) { md = got; usedFile = r.hit }
       }
     }
 
@@ -262,7 +274,7 @@ exports.main = async (event = {}) => {
     if (!md) { missingPrompts.push(p.promptId); continue }
 
     const { meta, body } = parseFrontmatter(md)
-    // 依规格：version 从 md 的 YAML frontmatter 的 id 字段提取（如 AGT-0924-w8n-096）
+    // 依规格：version 从 md 的 YAML frontmatter 的 id 字段提取（如 AGT-0924-w8n-108）
     const version = meta.id || p.promptId
 
     await upsertPrompt({
@@ -276,10 +288,16 @@ exports.main = async (event = {}) => {
     importedPrompts.push({ id: p.promptId, version, from: usedFile })
   }
 
-  // 返回口径：缺表/缺资产明确列出，供上层声明缺口（合法停摆）
+  // 返回口径：缺表/缺资产明确列出，供上层声明缺口（合法停摆）；多命中歧义单列，供人工消歧后重跑
   const gapNotes = []
   if (missing.length) gapNotes.push(`速查表：${missing.join('、')}`)
   if (missingPrompts.length) gapNotes.push(`prompt 资产：${missingPrompts.join('、')}`)
+  if (ambiguousTables.length) {
+    gapNotes.push('多命中歧义（表）：' + ambiguousTables.map((a) => `${a.tableNo}〈${a.nameSeg}〉→${a.hits.join('|')}`).join('；'))
+  }
+  if (ambiguousPrompts.length) {
+    gapNotes.push('多命中歧义（prompt）：' + ambiguousPrompts.map((a) => `${a.promptId}〈${a.nameSeg}〉→${a.hits.join('|')}`).join('；'))
+  }
   if (dirError) gapNotes.push(`列 ref_tables 目录失败：${dirError}`)
   if (promptDirError) gapNotes.push(`列 prompt_assets 目录失败：${promptDirError}`)
 
@@ -289,11 +307,13 @@ exports.main = async (event = {}) => {
     promptDirError,
     imported,
     missing,
+    ambiguousTables,
     importedPrompts,
     missingPrompts,
+    ambiguousPrompts,
     note: gapNotes.length
       ? `以下文件在云存储未找到 → ${gapNotes.join('；')}。已如实报缺，未编造内容；` +
-        `请补传对应 md 后重跑本脚本。`
+        `请补传对应 md（多命中歧义请先清理同名段文件）后重跑本脚本。`
       : '全部速查表与 prompt 资产导入完成。'
   }
 }

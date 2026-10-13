@@ -1,16 +1,22 @@
 // tests/assets_config_negative_tests.js
 // 任务52配置外置 —— 负向单测（纯 Node 断言，零云依赖）
+// 【任务55更新】卡链108-112 + 名称段匹配（nameSeg，编号不参与）：
+//   ①组缺件用例换新卡ID（098→109）；②组改为"编号对名称不对→不命中"；
+//   ③组改为"编号不对名称对→命中"与"多命中→报歧义"（原"精确fileName优先"逻辑已退役）；
+//   新增⑥组：selectCard/cardToMode 卡链路由负向用例。
 //
 // 运行：node tests/assets_config_negative_tests.js
 //
 // 设计：
 //   - 用 Module._load 拦截 wx-server-sdk 与 @cloudbase/manager-node 替身，避免真实云依赖。
 //   - 用 fs 在临时目录改写清单副本模拟缺件，不改仓库原件。
-//   - 覆盖：①清单缺项报缺（MODEL_MAP/EXPECTED_TABLES/EXPECTED_PROMPTS 各一）
-//           ②改名不命中不误配（精确 fileName 不中 + 数字段模糊不中 → 报缺）
-//           ③模糊兜底优先级（精确 fileName 与数字段模糊同时可命中 → 选精确 fileName）
+//   - 覆盖：①清单缺项报缺（MODEL_MAP/EXPECTED_TABLES/EXPECTED_PROMPTS/BINDINGS角色 各一）
+//           ②编号对名称不对→不命中不误配（任务55负向必备一）
+//           ③编号不对名称对→命中 / 多命中→报歧义（任务55负向必备二、三）
 //           ④ENV_ID 环境ID兜底优先级（任务53：清单>wxContext>TCB_ENV>undefined）
 //           ⑤chat位角色注入（任务54：注入system含"食知"/缺PERSONA拒绝点名/空白拒绝/非chat不注入）
+//           ⑥任务55卡链路由：百科动词→111 / 默认108 / 显式快速109 / 裸"分析"不进111 /
+//             cardToMode(111)=recommend_deep / 未知卡throw点名 / 缺CARD_WIKI绑定拒绝点名
 //   - 结束打印 "n/m PASS"。
 
 'use strict'
@@ -220,8 +226,9 @@ check('①b EXPECTED_TABLES 缺 051 → checkConfig.ok=false 且项数不足', (
 })
 
 // ①-c EXPECTED_PROMPTS 缺某 promptId → 项数不足且点名
-check('①c EXPECTED_PROMPTS 缺 098 → checkConfig.ok=false 且项数不足', () => {
-  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-098'))
+// 【任务55】卡链108-112，缺件样本用 109（快速卡）
+check('①c EXPECTED_PROMPTS 缺 109 → checkConfig.ok=false 且项数不足', () => {
+  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-109'))
   const r = loadConfig(p)
   assert.strictEqual(r.ok, true, '清单加载不应抛错：' + (r.error && r.error.message))
   const chk = r.value.checkConfig()
@@ -242,21 +249,23 @@ check('①d aiGateway 清单缺 chat → 加载即 throw，信息含"缺"并点�
 })
 
 // ①-e recommend.js：清单缺 promptId → 加载即 throw，信息含"缺"并点名
-check('①e recommend.js 清单缺 098 → 加载即 throw，信息含"缺"并点名', () => {
-  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-098'))
+// 【任务55】缺件样本用 109（CARD_FAST 绑定指向它）
+check('①e recommend.js 清单缺 109 → 加载即 throw，信息含"缺"并点名', () => {
+  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-109'))
   const r = loadScriptWithConfig(
     path.join(ROOT, 'common', 'recommend.js'), p)
   assert.strictEqual(r.ok, false, 'recommend.js 应加载即抛错拒绝执行')
   const msg = String(r.error && r.error.message || r.error)
   assert.ok(msg.indexOf('缺') >= 0, '错误信息应含"缺"，实得：' + msg)
-  assert.ok(msg.indexOf('AGT-0924-w8n-098') >= 0 || msg.indexOf('EXPECTED_PROMPTS') >= 0,
+  assert.ok(msg.indexOf('AGT-0924-w8n-109') >= 0 || msg.indexOf('EXPECTED_PROMPTS') >= 0,
     '错误信息应点名缺的 prompt 资产，实得：' + msg)
 })
 
 // ①-f importRefTables：清单缺项 → main() 返回 ok=false 且 note 点名，不猜默认值
-check('①f importRefTables 清单缺 098 → main() 返回 ok=false 且 note 点名', async () => {
+// 【任务55】缺件样本用 109
+check('①f importRefTables 清单缺 109 → main() 返回 ok=false 且 note 点名', async () => {
   // importRefTables 的清单自检在 main 入口，需实际调用 main
-  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-098'))
+  const p = makeConfigCopy((s) => dropPromptId(s, 'AGT-0924-w8n-109'))
   const r = loadScriptWithConfig(
     path.join(ROOT, 'cloudfunctions', 'importRefTables', 'index.js'), p)
   assert.strictEqual(r.ok, true, 'importRefTables 加载不应抛错（自检在 main）：' + (r.error && r.error.message))
@@ -284,10 +293,22 @@ check('①g recommend.js 缺 PROMPT_BINDINGS.PROMPT_RECOGNIZE → 加载即 thro
     '错误信息应点名 PROMPT_BINDINGS.PROMPT_RECOGNIZE，实得：' + msg)
 })
 
+// ①-h 【任务55】缺 CARD_WIKI 绑定（百科卡111接线）→ recommend.js 加载即 throw，点名该角色
+check('①h recommend.js 缺 PROMPT_BINDINGS.CARD_WIKI → 加载即 throw，点名该角色', () => {
+  const p = makeConfigCopy((s) => dropBinding(s, 'CARD_WIKI'))
+  const r = loadScriptWithConfig(
+    path.join(ROOT, 'common', 'recommend.js'), p)
+  assert.strictEqual(r.ok, false, 'recommend.js 应加载即抛错拒绝执行')
+  const msg = String(r.error && r.error.message || r.error)
+  assert.ok(msg.indexOf('缺') >= 0, '错误信息应含"缺"，实得：' + msg)
+  assert.ok(msg.indexOf('PROMPT_BINDINGS.CARD_WIKI') >= 0,
+    '错误信息应点名 PROMPT_BINDINGS.CARD_WIKI，实得：' + msg)
+})
+
 // ═══════════════════════════════════════════════════════════════
-// ② 改名不命中不误配（精确 fileName 不中 + 数字段模糊不中 → 报缺）
+// ② 编号对名称不对→不命中不误配（任务55负向必备一：编号完全不参与匹配）
 // ═══════════════════════════════════════════════════════════════
-console.log('\n— ② 改名不命中不误配 —')
+console.log('\n— ② 编号对名称不对→不命中不误配（任务55） —')
 
 // 直接测 importRefTables 内部的匹配函数语义：通过注入"目录文件清单"驱动 main。
 // 用 stub 让 listCurrentDirectory 返回一批"改名后"的文件名，观察 missing 是否点名、是否错配。
@@ -386,71 +407,159 @@ function runImportWithDirFiles(dirFiles, promptFiles) {
   return mod.main({})
 }
 
-// ②-a 表文件改名：精确 fileName 不中 + 数字段模糊不中 → 报缺，且不错配到别的表
-check('②a 表文件改名（051→乱名）→ 051 进 missing，不误配到其他表', () => {
-  // 目录里放一批文件：051 的精确名被改掉，且不含独立数字段 "051"
+// ②-a 表文件名称段被改：编号 051 在、名称段不对（"辣度标注速查表"≠"辣度标注惯例"）→ 报缺，且不错配
+// （任务55机制：basename 含 nameSeg 才命中；编号完全不参与，编号对了也救不回错误名称）
+check('②a 编号对名称不对（051辣度标注速查表.md）→ 051 进 missing，不误配到其他表', () => {
   const dirFiles = [
     'ref_tables/016口味负荷速查表.md',
     'ref_tables/020场景速查表.md',
     'ref_tables/033稳定性判定.md',
-    'ref_tables/辣度标注惯例_乱改.md',      // 051 原精确名被改，且无 "051" 数字段
+    'ref_tables/051辣度标注速查表.md',      // 编号 051 在，但名称段不对 → 不命中（任务55负向必备一）
     'ref_tables/通用维度底线表_R9.md',
     'ref_tables/口味搭配方法_R3.md',
     'ref_tables/情景速查表_R7.md',
-    'ref_tables/017机制原理.md',
-    'ref_tables/026机制原理.md'
+    'ref_tables/味相互作用原理_017.md',
+    'ref_tables/机制原理手册_026.md'
   ]
+  // 任务55新链 prompt 文件名（含各自 nameSeg）
   const promptFiles = [
-    'prompt_assets/识图任务执行卡-AGT-0924-w8n-096.md',
-    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-097.md',
-    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-098.md',
-    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-099.md'
+    'prompt_assets/识图任务执行卡-AGT-0924-w8n-110.md',
+    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-108.md',
+    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-109.md',
+    'prompt_assets/饮食百科任务执行卡-AGT-0924-w8n-111.md',
+    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-112.md'
   ]
   const ret = runImportWithDirFiles(dirFiles, promptFiles)
   return ret.then((out) => {
     assert.ok(out.missing.indexOf('051') >= 0, '051 应进 missing，实得 missing=' + JSON.stringify(out.missing))
     // 不得错配：051 不应出现在 imported 里
     const importedNos = (out.imported || []).map((x) => x.tableNo)
-    assert.ok(importedNos.indexOf('051') < 0, '051 改名后不得被错配导入')
+    assert.ok(importedNos.indexOf('051') < 0, '051 名称段不对时不得被错配导入（编号不参与）')
     // 其他表应正常导入（不因 051 缺而整体失败）
     assert.ok(importedNos.indexOf('016') >= 0, '016 应正常导入')
+    // prompt 五卡应全部按名称段命中（含编号 110-112 的新文件名）
+    const importedPromptIds = (out.importedPrompts || []).map((x) => x.id)
+    assert.strictEqual(importedPromptIds.length, 5, '五张 prompt 卡应全部导入，实得：' + importedPromptIds.join('、'))
   })
 })
 
 // ═══════════════════════════════════════════════════════════════
-// ③ 模糊兜底优先级（精确 fileName 与数字段模糊同时可命中 → 选精确 fileName）
+// ③ 名称段命中与多命中歧义（任务55负向必备二、三）
+//   原"精确 fileName 优先于数字段模糊"逻辑已随任务55退役（编号/精确文件名均不参与匹配），
+//   本组按任务书第4步替换为：编号不对名称对→命中；多命中→报歧义。
 // ═══════════════════════════════════════════════════════════════
-console.log('\n— ③ 模糊兜底优先级 —')
+console.log('\n— ③ 名称段命中与多命中歧义（任务55） —')
 
-check('③ 051 同时存在"精确名"与"含051数字段"两文件 → 选精确 fileName', () => {
-  // 目录里：精确名文件 + 一个含独立数字段 051 的干扰文件
+// ③-a 编号不对名称对→命中：051 文件名不含 "051"、但含名称段 → 照样导入（任务55负向必备二）
+check('③a 编号不对名称对（辣度标注惯例_R8终版.md 无编号）→ 051 命中导入', () => {
   const dirFiles = [
     'ref_tables/016口味负荷速查表.md',
     'ref_tables/020场景速查表.md',
     'ref_tables/033稳定性判定.md',
-    'ref_tables/辣度标注惯例_R8.md',       // 051 精确 fileName（应被选中）
-    'ref_tables/051干扰文件.md',           // 含独立数字段 051（模糊可命中，但应让位）
+    'ref_tables/辣度标注惯例_R8终版.md',     // 无编号、名称段对 → 命中（任务55负向必备二）
     'ref_tables/通用维度底线表_R9.md',
     'ref_tables/口味搭配方法_R3.md',
     'ref_tables/情景速查表_R7.md',
-    'ref_tables/017机制原理.md',
-    'ref_tables/026机制原理.md'
+    'ref_tables/味相互作用原理_017.md',
+    'ref_tables/机制原理手册_026.md'
   ]
   const promptFiles = [
-    'prompt_assets/识图任务执行卡-AGT-0924-w8n-096.md',
-    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-097.md',
-    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-098.md',
-    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-099.md'
+    'prompt_assets/识图任务执行卡-AGT-0924-w8n-110.md',
+    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-108.md',
+    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-109.md',
+    'prompt_assets/饮食百科任务执行卡-AGT-0924-w8n-111.md',
+    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-112.md'
   ]
   const ret = runImportWithDirFiles(dirFiles, promptFiles)
   return ret.then((out) => {
+    assert.ok(out.missing.indexOf('051') < 0, '051 不应进 missing，实得 missing=' + JSON.stringify(out.missing))
     const rec = (out.imported || []).find((x) => x.tableNo === '051')
-    assert.ok(rec, '051 应被导入')
-    // 精确 fileName 优先：from 应指向精确名文件，而非含 051 数字段的干扰文件
-    assert.ok(String(rec.from).indexOf('辣度标注惯例_R8.md') >= 0,
-      '051 应选中精确 fileName 文件，实得 from=' + rec.from)
-    assert.ok(String(rec.from).indexOf('051干扰文件') < 0,
-      '051 不得选中数字段模糊命中的干扰文件')
+    assert.ok(rec, '051 应按名称段命中导入（编号不参与）')
+    assert.ok(String(rec.from).indexOf('辣度标注惯例_R8终版.md') >= 0,
+      '051 应选中名称段命中的文件，实得 from=' + rec.from)
+    // 不得误报歧义：唯一命中
+    assert.ok(!(out.ambiguousTables || []).some((a) => a.tableNo === '051'),
+      '051 唯一命中时不得误报多命中歧义')
+  })
+})
+
+// ③-b 多命中→报歧义：同一名称段两个文件 → 不猜，进 missing 并注明"多命中歧义"+命中文件列表
+// （任务55负向必备三）
+check('③b 多命中→报歧义（两个含辣度标注惯例的文件）→ 051 进 missing 且 note 注明歧义与命中列表', () => {
+  const dirFiles = [
+    'ref_tables/016口味负荷速查表.md',
+    'ref_tables/020场景速查表.md',
+    'ref_tables/033稳定性判定.md',
+    'ref_tables/辣度标注惯例_R8.md',        // 命中①
+    'ref_tables/辣度标注惯例_R8_备份.md',   // 命中② → 多命中
+    'ref_tables/通用维度底线表_R9.md',
+    'ref_tables/口味搭配方法_R3.md',
+    'ref_tables/情景速查表_R7.md',
+    'ref_tables/味相互作用原理_017.md',
+    'ref_tables/机制原理手册_026.md'
+  ]
+  const promptFiles = [
+    'prompt_assets/识图任务执行卡-AGT-0924-w8n-110.md',
+    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-108.md',
+    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-109.md',
+    'prompt_assets/饮食百科任务执行卡-AGT-0924-w8n-111.md',
+    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-112.md'
+  ]
+  const ret = runImportWithDirFiles(dirFiles, promptFiles)
+  return ret.then((out) => {
+    // 不猜：051 不得被导入
+    const importedNos = (out.imported || []).map((x) => x.tableNo)
+    assert.ok(importedNos.indexOf('051') < 0, '多命中时 051 不得被猜着导入')
+    // 进 missing
+    assert.ok(out.missing.indexOf('051') >= 0, '多命中时 051 应进 missing，实得：' + JSON.stringify(out.missing))
+    // 歧义登记：命中列表两个文件、点名 051
+    const amb = (out.ambiguousTables || []).find((a) => a.tableNo === '051')
+    assert.ok(amb, 'ambiguousTables 应登记 051 的歧义')
+    assert.strictEqual(amb.hits.length, 2, '051 歧义命中列表应为 2 个文件，实得：' + JSON.stringify(amb.hits))
+    assert.ok(amb.hits.some((h) => h.indexOf('辣度标注惯例_R8.md') >= 0) &&
+              amb.hits.some((h) => h.indexOf('辣度标注惯例_R8_备份.md') >= 0),
+      '051 歧义命中列表应含两个命中文件名，实得：' + amb.hits.join('|'))
+    // note 注明"多命中歧义"+命中文件
+    assert.ok(String(out.note || '').indexOf('多命中歧义') >= 0,
+      'note 应注明"多命中歧义"，实得：' + out.note)
+    assert.ok(String(out.note || '').indexOf('辣度标注惯例') >= 0,
+      'note 应列出命中文件，实得：' + out.note)
+  })
+})
+
+// ③-c prompt 资产多命中→报歧义：同一名称段（详细推荐执行卡）两个文件 → 108 进 missingPrompts
+// （与 ③-b 同机制，覆盖 prompt 资产路径）
+check('③c prompt 多命中→报歧义（两个含详细推荐执行卡的文件）→ 108 进 missingPrompts 且歧义登记', () => {
+  const dirFiles = [
+    'ref_tables/016口味负荷速查表.md',
+    'ref_tables/020场景速查表.md',
+    'ref_tables/033稳定性判定.md',
+    'ref_tables/辣度标注惯例_R8.md',
+    'ref_tables/通用维度底线表_R9.md',
+    'ref_tables/口味搭配方法_R3.md',
+    'ref_tables/情景速查表_R7.md',
+    'ref_tables/味相互作用原理_017.md',
+    'ref_tables/机制原理手册_026.md'
+  ]
+  const promptFiles = [
+    'prompt_assets/识图任务执行卡-AGT-0924-w8n-110.md',
+    'prompt_assets/详细推荐执行卡-AGT-0924-w8n-108.md',   // 命中①
+    'prompt_assets/详细推荐执行卡_旧版留档.md',           // 命中② → 多命中
+    'prompt_assets/快速推荐执行卡-AGT-0924-w8n-109.md',
+    'prompt_assets/饮食百科任务执行卡-AGT-0924-w8n-111.md',
+    'prompt_assets/饮食推荐agent初始化prompt-AGT-0924-w8n-112.md'
+  ]
+  const ret = runImportWithDirFiles(dirFiles, promptFiles)
+  return ret.then((out) => {
+    assert.ok((out.missingPrompts || []).indexOf('AGT-0924-w8n-108') >= 0,
+      '108 应进 missingPrompts，实得：' + JSON.stringify(out.missingPrompts))
+    const amb = (out.ambiguousPrompts || []).find((a) => a.promptId === 'AGT-0924-w8n-108')
+    assert.ok(amb, 'ambiguousPrompts 应登记 108 的歧义')
+    assert.strictEqual(amb.hits.length, 2, '108 歧义命中列表应为 2 个文件，实得：' + JSON.stringify(amb.hits))
+    const importedPromptIds = (out.importedPrompts || []).map((x) => x.id)
+    assert.ok(importedPromptIds.indexOf('AGT-0924-w8n-108') < 0, '多命中时 108 不得被猜着导入')
+    // 其余四卡不受影响
+    assert.strictEqual(importedPromptIds.length, 4, '其余四卡应正常导入，实得：' + importedPromptIds.join('、'))
   })
 })
 
@@ -677,6 +786,58 @@ checkAsync('⑤d 非 chat 位（recognize）不注入 system', async () => {
   assert.ok(Array.isArray(sent), '应捕获到实际发出的 messages')
   assert.strictEqual(sent.length, 1, 'recognize 消息数应保持 1，实得 ' + sent.length)
   assert.strictEqual(sent[0].role, 'user', 'recognize 不应注入 system（messages[0] 应为 user），实得：' + sent[0].role)
+})
+
+// ═══════════════════════════════════════════════════════════════
+// ⑥ 任务55卡链路由：selectCard / cardToMode 负向用例（卡112卡面"卡选择"段口径）
+// ═══════════════════════════════════════════════════════════════
+console.log('\n— ⑥ 任务55卡链路由 —')
+
+// ⑥-a 百科动词 → 111："为什么搭" / "新菜品·新食谱·新搭配" / "记录"
+check('⑥a 百科动词（为什么搭/新菜品记录）→ selectCard 返回 111', () => {
+  const r = require(path.join(ROOT, 'common', 'recommend.js'))
+  assert.strictEqual(r.selectCard('为什么搭豆浆和油条').id, 'AGT-0924-w8n-111',
+    '"为什么搭"应路由到百科卡111')
+  assert.strictEqual(r.selectCard('新菜品：番茄炒蛋，记录一下').id, 'AGT-0924-w8n-111',
+    '"新菜品/记录"应路由到百科卡111')
+})
+
+// ⑥-b 推荐默认108；显式"快速"→109（卡112：未显式说明一律默认详查卡108）
+check('⑥b 默认→108；显式"快速"→109', () => {
+  const r = require(path.join(ROOT, 'common', 'recommend.js'))
+  assert.strictEqual(r.selectCard('推荐几个清淡的菜').id, 'AGT-0924-w8n-108',
+    '未显式说明应默认详查卡108')
+  assert.strictEqual(r.selectCard('快速推荐，赶时间').id, 'AGT-0924-w8n-109',
+    '显式"快速"应用快查卡109')
+})
+
+// ⑥-c 裸"分析"不进111："分析"为108/111共用动词，单独出现走默认卡（卡112口径）
+check('⑥c 裸"分析"（帮我分析一下）→ 不进111，默认108', () => {
+  const r = require(path.join(ROOT, 'common', 'recommend.js'))
+  assert.strictEqual(r.selectCard('帮我分析一下这桌菜').id, 'AGT-0924-w8n-108',
+    '裸"分析"应走默认详查卡108而非百科卡111')
+})
+
+// ⑥-d cardToMode：111 → recommend_deep（百科=深度分析，无快速模式）；未知卡 id → throw 点名
+check('⑥d cardToMode(111)=recommend_deep；未知卡 throw 且点名 id', () => {
+  const r = require(path.join(ROOT, 'common', 'recommend.js'))
+  assert.strictEqual(r.cardToMode({ id: 'AGT-0924-w8n-111' }), 'recommend_deep',
+    '百科卡111应映射 recommend_deep（无快速模式，不占 recommend_fast）')
+  let threw = null
+  try { r.cardToMode({ id: 'AGT-UNKNOWN-XYZ' }) } catch (e) { threw = e }
+  assert.ok(threw, '未知卡 id 应 throw（任务48口径，静默回退已封死）')
+  assert.ok(String(threw.message).indexOf('AGT-UNKNOWN-XYZ') >= 0,
+    'throw 信息应点名未知卡 id，实得：' + threw.message)
+})
+
+// ⑥-e 常量绑定：五卡常量读自清单 PROMPT_BINDINGS（108/109/110/111/112 一一对上）
+check('⑥e 五卡常量=清单绑定（INIT=112/DEEP=108/FAST=109/RECOG=110/WIKI=111）', () => {
+  const r = require(path.join(ROOT, 'common', 'recommend.js'))
+  assert.strictEqual(r.PROMPT_INIT.id, 'AGT-0924-w8n-112')
+  assert.strictEqual(r.CARD_DEEP.id, 'AGT-0924-w8n-108')
+  assert.strictEqual(r.CARD_FAST.id, 'AGT-0924-w8n-109')
+  assert.strictEqual(r.PROMPT_RECOGNIZE.id, 'AGT-0924-w8n-110')
+  assert.strictEqual(r.CARD_WIKI.id, 'AGT-0924-w8n-111')
 })
 
 // ── 收尾 ─────────────────────────────────────────────────────────

@@ -1,11 +1,11 @@
 // common/recommend.js
 // 饮食推荐系统 —— L0 会话层 + L1 装配层 实现
-// 依据：推荐系统结构设计v1.0（文档1）/ 详细卡097（文档2）/ 快速卡098（文档3）
-//       / 初始化prompt099（文档4）/ 路由头v2（文档5）/ aiGateway原文（文档6）
-//       / 识图卡096（图像信息识别前置，文档7）
+// 依据：推荐系统结构设计v1.0（文档1）/ 任务55卡链：详细卡108 / 快速卡109 /
+//       初始化prompt112 / 识图卡110（图像信息识别前置）/ 百科卡111（百科记录分析）
+//       / 路由头v2（文档5）/ aiGateway原文（文档6）
 //
 // 任务52配置外置：可配置项已移至 ./assets.config.js（清单部署副本，置于 miniprogram/common/ 同目录；母本 cloudfunctions/shared/assets.config.js）
-//   PROMPT_INIT/CARD_DEEP/CARD_FAST/PROMPT_RECOGNIZE 四个常量改从清单 PROMPT_BINDINGS 角色绑定读取；
+//   PROMPT_INIT/CARD_DEEP/CARD_FAST/PROMPT_RECOGNIZE/CARD_WIKI 五个常量改从清单 PROMPT_BINDINGS 角色绑定读取；
 //   清单缺对应卡 → 报错列出缺项，不猜默认。
 //
 // 红线（与设计文档一致）：
@@ -17,7 +17,7 @@
 // 六项要求 → 实现位置：
 //   ① mealSession 状态机            → §1 createMealSession / transition / 各阶段
 //   ② prompt 装配器                 → §2 assemblePrompt / loadPrompt / loadTables
-//   ③ 卡选择逻辑（默认097，显式"快速"才098） → §3 selectCard / cardToMode
+//   ③ 卡选择逻辑（任务55卡112卡面：推荐→默认108，显式"快速"→109；百科任务→111） → §3 selectCard / cardToMode
 //   ④ 无支持项查证二次独立调用编排   → §4 verifyUnsupportedItems
 //   ⑤ 规则层硬过滤双保险             → §5 ruleLayerFilter / reconcileFilters
 //   ⑥ 识图前置链（含图先识图，096）  → §6 recognizeImages / beginRecognizing
@@ -51,10 +51,11 @@ function requirePromptRole(role) {
 }
 
 // ── 常量：prompt 资产（只存 ID，正文从 DB 读；任务52改从清单 PROMPT_BINDINGS 角色绑定读）──
-const PROMPT_INIT = requirePromptRole('PROMPT_INIT')     // 每轮初始化 prompt（新链尾）
-const CARD_DEEP   = requirePromptRole('CARD_DEEP')       // 详细卡（默认，新链尾）
-const CARD_FAST   = requirePromptRole('CARD_FAST')       // 快速卡（仅显式"快速"，新链尾）
-const PROMPT_RECOGNIZE = requirePromptRole('PROMPT_RECOGNIZE') // 识图任务卡（图像前置）
+const PROMPT_INIT = requirePromptRole('PROMPT_INIT')     // 每轮初始化 prompt（任务55新链=112）
+const CARD_DEEP   = requirePromptRole('CARD_DEEP')       // 详细卡（默认卡，任务55新链=108）
+const CARD_FAST   = requirePromptRole('CARD_FAST')       // 快速卡（仅显式"快速"，任务55新链=109）
+const PROMPT_RECOGNIZE = requirePromptRole('PROMPT_RECOGNIZE') // 识图任务卡（图像前置，任务55新链=110）
+const CARD_WIKI   = requirePromptRole('CARD_WIKI')       // 百科任务卡（记录/为什么搭，无快速模式，任务55新链=111）
 
 // 初始化块"将查的表"缺省集合（来自 099）
 const DEFAULT_TABLES   = ['016', '020', '033', '051', '062']
@@ -64,9 +65,11 @@ const SUPPORT_TABLES   = ['058', '068']
 const MECHANISM_TABLES = ['017', '026']
 
 // ── 常量：卡 → 网关功能位 mode 映射（对应 aiGateway MODEL_MAP）───────
+// 任务55：CARD_WIKI 走 recommend_deep——百科=深度分析且无快速模式（卡111硬约束①），不占 recommend_fast 位。
 const CARD_TO_MODE = {
-  [CARD_DEEP.id]: 'recommend_deep',
-  [CARD_FAST.id]: 'recommend_fast'
+  [CARD_DEEP.id]:  'recommend_deep',
+  [CARD_FAST.id]:  'recommend_fast',
+  [CARD_WIKI.id]:  'recommend_deep'
 }
 
 // ── 常量：会话状态机 ──────────────────────────────────────────────
@@ -215,15 +218,27 @@ function closeSession(session) {
 }
 
 // ===========================================================================
-// §3 卡选择逻辑（作用：决定 prompt 用哪张卡 + 网关用哪个 mode）
+// §3 卡选择逻辑（作用：决定 prompt 用哪张卡 + 网关用哪个 mode；任务55新链108/109/111）
 // ===========================================================================
 
 /**
- * 卡选择：默认详细卡097；仅当用户输入"显式含快速"才用快速卡098。
+ * 任务类判定（任务55，卡111"适用"段）：百科记录分析 = 动词"为什么搭"类发问 / 新菜品·新食谱·新搭配对象 / "记录"。
+ * 注："分析"为108/111两卡共用动词，不单独触发百科（卡112：未显式说明一律默认详查卡108）。
+ */
+function isWikiTask(text) {
+  return /(为什么搭|为何搭|怎么搭)/.test(text) ||
+         /(新菜品|新食谱|新搭配)/.test(text) ||
+         /记录/.test(text)
+}
+
+/**
+ * 卡选择（任务55卡112卡面"卡选择"段）：
+ *   百科任务 → CARD_WIKI(111)；推荐任务 → 默认 CARD_DEEP(108)，仅显式"快速" → CARD_FAST(109)。
  * 否定式（"不快速/别快速/没快速"）不触发快速卡。
  */
 function selectCard(userInput) {
   const text = String(userInput || '')
+  if (isWikiTask(text)) return CARD_WIKI
   // 显式"快速"口令，排除紧邻否定词
   const explicitFast = /(^|[^不别没])快速/.test(text)
   return explicitFast ? CARD_FAST : CARD_DEEP
@@ -582,7 +597,7 @@ async function recommend({ session, userInput, gateway, db, needMechanism = fals
 // ── 导出 ─────────────────────────────────────────────────────────
 module.exports = {
   // 常量
-  SESSION_STATE, PROMPT_INIT, CARD_DEEP, CARD_FAST, PROMPT_RECOGNIZE,
+  SESSION_STATE, PROMPT_INIT, CARD_DEEP, CARD_FAST, PROMPT_RECOGNIZE, CARD_WIKI,
   // ① 会话状态机
   createMealSession, advance,
   judgeScene, collectRequirements, loadCandidates,

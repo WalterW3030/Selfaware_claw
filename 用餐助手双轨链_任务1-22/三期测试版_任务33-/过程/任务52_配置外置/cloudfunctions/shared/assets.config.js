@@ -110,6 +110,22 @@ const PERSONA = {
   chat_system: '你是食知小程序的用餐助手，由Walter团队开发，帮用户记录每餐、看懂搭配，按速查表给点餐建议。'
 }
 
+// ── ⑦ HEALTH_NOTICE 医疗健康免责声明（任务56新增，Walter 2026-10-13 定稿指令）──
+// 用途：aiGateway 返回出口按双保险规则计算 health_notice 结构化标记字段；
+//       前端检测到 true 时在对话框下方独立一行显示声明文本（不折叠、不拼进模型输出）。
+// 双保险OR关系：①推荐链结果（recommend_deep/recommend_fast）一律标记；
+//               ②其他输出（chat等）用宽口径关键词表扫描结果文本，命中即标记。
+// 判别门槛：允许多判（非医疗出声明可以），杜绝少判（医疗相关必须有）。
+// 铁律：声明文本与关键词表唯一来源 = 本清单（禁硬编码），脚本零字面量。
+const HEALTH_NOTICE = {
+  enabled: true, // 机制总开关（false = 全链关闭，网关返回 false，前端不显示）
+  text: '以上内容为AI生成，仅供点餐参考，不能替代医生诊疗意见，请以医嘱为准。',
+  keywords: [
+    '忌口', '过敏', '疾病', '症状', '血糖', '血压', '糖尿病',
+    '孕妇', '哺乳', '医嘱', '治疗', '营养', '慢病', '吃药', '药物', '清淡', '养胃'
+  ]
+}
+
 // ── 清单自检函数 ─────────────────────────────────────────────────
 // 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项（含 nameSeg）/ EXPECTED_PROMPTS 五项（含 nameSeg）。
 // 通过 → { ok: true, missing: [] }
@@ -170,6 +186,27 @@ function checkConfig() {
     }
   }
 
+  // ⑦ HEALTH_NOTICE 段（任务56）：声明文本 + 关键词表 + 开关
+  if (!HEALTH_NOTICE || typeof HEALTH_NOTICE !== 'object') {
+    missing.push('HEALTH_NOTICE')
+  } else {
+    if (HEALTH_NOTICE.enabled !== true && HEALTH_NOTICE.enabled !== false) {
+      missing.push('HEALTH_NOTICE.enabled（必须是布尔值）')
+    }
+    if (typeof HEALTH_NOTICE.text !== 'string' || HEALTH_NOTICE.text.trim() === '') {
+      missing.push('HEALTH_NOTICE.text（声明文本，非空字符串）')
+    }
+    if (!Array.isArray(HEALTH_NOTICE.keywords) || HEALTH_NOTICE.keywords.length === 0) {
+      missing.push('HEALTH_NOTICE.keywords（关键词表，至少一项）')
+    } else {
+      HEALTH_NOTICE.keywords.forEach((k, i) => {
+        if (typeof k !== 'string' || k.trim() === '') {
+          missing.push(`HEALTH_NOTICE.keywords[${i}]（非空字符串）`)
+        }
+      })
+    }
+  }
+
   return { ok: missing.length === 0, missing }
 }
 
@@ -188,5 +225,6 @@ module.exports = {
   DEFAULT_PROMPT_DIR,
   ENV_ID,
   PERSONA,
+  HEALTH_NOTICE,
   checkConfig
 }

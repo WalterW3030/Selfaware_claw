@@ -17,6 +17,8 @@
 //           ⑤chat位角色注入（任务54：注入system含"食知"/缺PERSONA拒绝点名/空白拒绝/非chat不注入）
 //           ⑥任务55卡链路由：百科动词→111 / 默认108 / 显式快速109 / 裸"分析"不进111 /
 //             cardToMode(111)=recommend_deep / 未知卡throw点名 / 缺CARD_WIKI绑定拒绝点名
+//           ⑦任务56健康免责声明：非医疗chat→false / 含"过敏"→true / 推荐链→恒true /
+//             声明文本不拼正文 / enabled=false→恒false
 //   - 结束打印 "n/m PASS"。
 
 'use strict'
@@ -838,6 +840,125 @@ check('⑥e 五卡常量=清单绑定（INIT=112/DEEP=108/FAST=109/RECOG=110/WIK
   assert.strictEqual(r.CARD_FAST.id, 'AGT-0924-w8n-109')
   assert.strictEqual(r.PROMPT_RECOGNIZE.id, 'AGT-0924-w8n-110')
   assert.strictEqual(r.CARD_WIKI.id, 'AGT-0924-w8n-111')
+})
+
+// ═══════════════════════════════════════════════════════════════
+// ⑦ 任务56健康免责声明：双保险标记负向用例
+//   a 非医疗chat无关键词 → health_notice=false
+//   b chat含"过敏" → health_notice=true（宽口径关键词命中）
+//   c 推荐链(recommend_deep/fast) → 恒true（双保险①，不依赖关键词）
+//   d 声明文本不拼进回复正文（声明独立于模型输出）
+//   e enabled=false → 恒false（开关关闭，双保险全断）
+// ═══════════════════════════════════════════════════════════════
+console.log('\n— ⑦ 任务56健康免责声明 —')
+
+// 工具：加载 aiGateway，清单重定向到改写副本 + 控制 generateText 返回文本（模拟模型输出）
+function loadGatewayWithResponse(configMutate, responseText) {
+  const p = makeConfigCopy(configMutate)
+  const scriptAbs = path.join(ROOT, 'cloudfunctions', 'aiGateway', 'index.js')
+  const orig = Module._load
+  Module._load = function (request, parent, isMain) {
+    if (/assets\.config(\.js)?$/.test(request) && parent && parent.filename &&
+        path.resolve(parent.filename) === scriptAbs) {
+      const abs = path.resolve(p)
+      delete require.cache[require.resolve(abs)]
+      return require(abs)
+    }
+    if (request === 'wx-server-sdk') {
+      return {
+        init() {},
+        DYNAMIC_CURRENT_ENV: 'x',
+        ai() {
+          return {
+            createModel() {
+              return {
+                generateText(data) {
+                  return Promise.resolve({ text: responseText })
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return orig.apply(this, arguments)
+  }
+  try { delete require.cache[require.resolve(scriptAbs)] } catch (e) {}
+  let mod = null, loadErr = null
+  try { mod = require(scriptAbs) } catch (e) { loadErr = e }
+  Module._load = orig
+  return { mod, loadErr }
+}
+
+// ⑦-a 非医疗 chat（无关键词）→ health_notice=false（不多判之外的少判兜底）
+checkAsync('⑦a 非医疗chat无关键词 → health_notice=false', async () => {
+  const g = loadGatewayWithResponse(null, '今天天气不错，适合出去散步')
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '你好' }] })
+  assert.ok(ret && !ret.error, 'chat 调用不应返回错误：' + JSON.stringify(ret))
+  assert.strictEqual(ret.health_notice, false,
+    '非医疗输出应 health_notice=false，实得：' + ret.health_notice)
+})
+
+// ⑦-b chat 输出含"过敏" → health_notice=true（宽口径关键词命中，杜绝少判）
+checkAsync('⑦b chat含"过敏" → health_notice=true', async () => {
+  const g = loadGatewayWithResponse(null, '这道菜含有花生，过敏人群请谨慎选择')
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '这道菜有什么禁忌' }] })
+  assert.ok(ret && !ret.error, 'chat 调用不应返回错误：' + JSON.stringify(ret))
+  assert.strictEqual(ret.health_notice, true,
+    '含"过敏"应 health_notice=true，实得：' + ret.health_notice)
+})
+
+// ⑦-c 推荐链结果（recommend_fast / recommend_deep）→ 恒 true（双保险①，不依赖关键词扫描）
+// 注：两次网关加载都在 await 前同步完成（收尾段会删 TMP，跨 await 建副本会 ENOENT）
+checkAsync('⑦c 推荐链结果 → health_notice恒true（不含关键词也标）', async () => {
+  const g = loadGatewayWithResponse(null, '1. 清蒸鲈鱼 2. 白灼虾')  // 推荐结果文本无医疗关键词
+  const g2 = loadGatewayWithResponse(null, '推荐你试试这道招牌菜')  // recommend_deep 同样无关键词
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  assert.strictEqual(g2.loadErr, null, 'aiGateway 加载不应报错：' + (g2.loadErr && g2.loadErr.message))
+  const retFast = await g.mod.main({ mode: 'recommend_fast', messages: [{ role: 'user', content: '推荐' }] })
+  assert.strictEqual(retFast.health_notice, true,
+    'recommend_fast 应恒 true，实得：' + retFast.health_notice)
+  const retDeep = await g2.mod.main({ mode: 'recommend_deep', messages: [{ role: 'user', content: '推荐' }] })
+  assert.strictEqual(retDeep.health_notice, true,
+    'recommend_deep 应恒 true，实得：' + retDeep.health_notice)
+})
+
+// ⑦-d 声明文本不被拼进回复正文（声明独立于模型输出，前端单独渲染）
+checkAsync('⑦d 声明文本不拼进回复正文', async () => {
+  const g = loadGatewayWithResponse(null, '这道菜含有花生，过敏人群请谨慎选择')
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '禁忌' }] })
+  assert.strictEqual(ret.health_notice, true, '含"过敏"应 health_notice=true')
+  // 声明文本从清单读（测试也禁硬编码字面量），断言不拼进模型输出 text
+  const masterConfig = require(SHARED_CONFIG)
+  const disclaimer = masterConfig.HEALTH_NOTICE && masterConfig.HEALTH_NOTICE.text
+  assert.ok(typeof disclaimer === 'string' && disclaimer.length > 0,
+    '清单 HEALTH_NOTICE.text 应存在（非空串）')
+  assert.ok(String(ret.text || '').indexOf(disclaimer) < 0,
+    '模型输出 text 不得包含声明文本（声明独立显示，不拼进正文）')
+})
+
+// ⑦-e enabled=false → 恒 false（机制总开关关闭，双保险全断）
+// 注：两次网关加载都在 await 前同步完成（同 ⑦-c 理由）
+checkAsync('⑦e enabled=false → 恒false（开关关闭，chat含关键词也不标）', async () => {
+  const mutateOff = (s) => s.replace(
+    'enabled: true, // 机制总开关',
+    'enabled: false, // 机制总开关'
+  )
+  const g = loadGatewayWithResponse(mutateOff, '过敏人群请谨慎选择这道菜')
+  const g2 = loadGatewayWithResponse(mutateOff, '推荐清淡菜品')
+  assert.strictEqual(g.loadErr, null, 'aiGateway 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  assert.strictEqual(g2.loadErr, null, 'aiGateway 加载不应报错：' + (g2.loadErr && g2.loadErr.message))
+  // chat 含关键词 → 仍 false（开关关闭）
+  const retChat = await g.mod.main({ mode: 'chat', messages: [{ role: 'user', content: '禁忌' }] })
+  assert.strictEqual(retChat.health_notice, false,
+    'enabled=false 时 chat 应 false，实得：' + retChat.health_notice)
+  // recommend_fast → 也 false（开关关闭，双保险①同样不标）
+  const retRec = await g2.mod.main({ mode: 'recommend_fast', messages: [{ role: 'user', content: '推荐' }] })
+  assert.strictEqual(retRec.health_notice, false,
+    'enabled=false 时 recommend 也应 false，实得：' + retRec.health_notice)
 })
 
 // ── 收尾 ─────────────────────────────────────────────────────────

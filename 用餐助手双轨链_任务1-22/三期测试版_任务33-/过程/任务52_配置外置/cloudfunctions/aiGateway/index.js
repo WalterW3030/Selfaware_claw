@@ -127,6 +127,26 @@ function extractText(res) {
   return null
 }
 
+// ── 任务56：健康免责声明标记计算 ─────────────────────────────────
+// 双保险OR关系：①推荐链结果（recommend_deep/recommend_fast）一律标记；
+//               ②其他输出（chat等）用清单关键词表扫描结果文本，命中即标记。
+// 判别门槛：允许多判（非医疗出声明可以），杜绝少判（医疗相关必须有）。
+// 声明文本与关键词表唯一来源 = 清单 HEALTH_NOTICE（本脚本零字面量）。
+const RECOMMEND_MODES = ['recommend_deep', 'recommend_fast']
+function computeHealthNotice(mode, text) {
+  const hn = assetsConfig.HEALTH_NOTICE
+  if (!hn || hn.enabled !== true) return false
+  // 双保险①：推荐链结果一律标记（详细卡108/快速卡109产出的推荐结果）
+  if (RECOMMEND_MODES.indexOf(mode) >= 0) return true
+  // 双保险②：其他输出（chat等）——宽口径关键词表扫描结果文本，命中即标记
+  if (typeof text !== 'string' || !text) return false
+  const kws = Array.isArray(hn.keywords) ? hn.keywords : []
+  for (let i = 0; i < kws.length; i++) {
+    if (typeof kws[i] === 'string' && kws[i].length > 0 && text.indexOf(kws[i]) >= 0) return true
+  }
+  return false
+}
+
 // ── 红线：营养模式数字泄漏拦截 ────────────────────────────────────
 const NUMERIC_LEAK = /\d+(\.\d+)?\s*(kcal|千卡|大卡|千焦|kj|克|g|mg|微克|ug|μg)/i
 function hasNumericLeak(text) {
@@ -191,6 +211,14 @@ exports.main = async (event) => {
 
   // [任务36] 说明：translate / order_phrase 走默认分支透传，不触发数字泄漏红线
   // （order_phrase 的价格/营养“不输出”由前端 prompt 约束 + 前端白名单校验承担，见 order.js）
+
+  // 【任务56】健康免责声明双保险标记：声明独立于对话回复，不拼进模型输出文本；
+  // 结构化字段 health_notice 随返回带出（true/false），前端检测到 true 时独立一行显示。
+  // 错误响应（res.error 已上方直返）不含 AI 生成内容，不打标。
+  const healthNoticeFlag = computeHealthNotice(mode, extractText(res))
+  if (res && typeof res === 'object' && !Array.isArray(res)) {
+    res.health_notice = healthNoticeFlag
+  }
 
   return res
 }

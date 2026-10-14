@@ -590,7 +590,12 @@ async function recommend({ session, userInput, gateway, db, needMechanism = fals
     mode,
     card: card.id,
     tableGaps,          // 非空 → UI 显示"先用简单推荐"+兜底排序
-    firstStage: res     // 排名 | 候选 | 分数 | 一句话理由 + "展开完整分析"
+    firstStage: res,    // 排名 | 候选 | 分数 | 一句话理由 + "展开完整分析"
+    // 【任务56】健康免责声明标记：推荐链结果（recommend_deep/fast）网关侧恒 true（双保险①）；
+    // 透传网关 health_notice，结构缺失时按清单开关兜底（推荐链=AI生成点餐建议，属声明覆盖范围）
+    health_notice: (res && typeof res === 'object' && typeof res.health_notice === 'boolean')
+      ? res.health_notice
+      : !!(assetsConfig.HEALTH_NOTICE && assetsConfig.HEALTH_NOTICE.enabled === true)
   }
 }
 

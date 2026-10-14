@@ -1,1 +1,14 @@
 /* 识别结果页样式：候选/角标样式待 T4 补全 */
+
+/* 【任务56】健康免责声明：最小样式（Walter 指令"样式最小实现，沿用现有文本样式"），
+   字号用 app.wxss 全局变量 --font-xs，不新增视觉设计。 */
+.health-notice {
+  margin-top: 24rpx;
+  padding: 16rpx 32rpx;
+}
+
+.health-notice-text {
+  font-size: var(--font-xs, 12pt);
+  color: #666666;
+  line-height: 1.5;
+}

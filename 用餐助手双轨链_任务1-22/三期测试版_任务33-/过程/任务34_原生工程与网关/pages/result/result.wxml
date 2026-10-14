@@ -12,4 +12,9 @@
     <button bindtap="goConfirm">确认</button>
     <button>纠正</button>
   </view>
+
+  <!-- 【任务56】健康免责声明:独立于对话回复,仅 health_notice=true 时显示,不折叠 -->
+  <view class="health-notice" wx:if="{{healthNotice}}">
+    <text class="health-notice-text">{{healthNoticeText}}</text>
+  </view>
 </view>

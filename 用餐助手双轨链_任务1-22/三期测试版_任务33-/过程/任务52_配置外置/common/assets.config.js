@@ -58,15 +58,15 @@ const REQUIRED_TABLE_COUNT = 9
 
 // ── ③ EXPECTED_PROMPTS 五项（任务55：卡链108-112，各含 nameSeg 固定名称段）──
 // 匹配规则（任务55改造，importRefTables）：basename 是否包含 nameSeg 判定命中，编号不参与。
-// fileName = 附件送达原始文件名逐字（upd1-5.md，Walter 卡链指令 2026-10-13）；
+// fileName = 附件送达原始文件名逐字（修复指令 2026-10-14，kimi 群派发）；
 // 卡标题 nameSeg 逐字取自五卡 H1（结论/执行卡_108-112/ 副本 SHA 与附件一致）。
 // 云存储默认目录 prompt_assets。
 const EXPECTED_PROMPTS = [
-  { promptId: 'AGT-0924-w8n-108', title: '详细推荐执行卡',            nameSeg: '详细推荐执行卡',            fileName: 'upd5.md' },
-  { promptId: 'AGT-0924-w8n-109', title: '快速推荐执行卡',            nameSeg: '快速推荐执行卡',            fileName: 'upd4.md' },
-  { promptId: 'AGT-0924-w8n-110', title: '识图任务执行卡',            nameSeg: '识图任务执行卡',            fileName: 'upd3.md' },
-  { promptId: 'AGT-0924-w8n-111', title: '饮食百科任务执行卡',        nameSeg: '饮食百科任务执行卡',        fileName: 'upd2.md' },
-  { promptId: 'AGT-0924-w8n-112', title: '饮食推荐agent初始化prompt', nameSeg: '饮食推荐agent初始化prompt', fileName: 'upd1.md' }
+  { promptId: 'AGT-0924-w8n-108', title: '详细推荐执行卡',            nameSeg: '详细推荐执行卡',            fileName: '详细推荐执行卡-AGT-0924-w8n-108.md' },
+  { promptId: 'AGT-0924-w8n-109', title: '快速推荐执行卡',            nameSeg: '快速推荐执行卡',            fileName: '快速推荐执行卡-AGT-0924-w8n-109.md' },
+  { promptId: 'AGT-0924-w8n-110', title: '识图任务执行卡',            nameSeg: '识图任务执行卡',            fileName: '识图任务执行卡-AGT-0924-w8n-110.md' },
+  { promptId: 'AGT-0924-w8n-111', title: '饮食百科任务执行卡',        nameSeg: '饮食百科任务执行卡',        fileName: '饮食百科任务执行卡-AGT-0924-w8n-111.md' },
+  { promptId: 'AGT-0924-w8n-112', title: '饮食推荐agent初始化prompt', nameSeg: '饮食推荐agent初始化prompt', fileName: '饮食推荐agent初始化prompt-AGT-0924-w8n-112.md' }
 ]
 
 // EXPECTED_PROMPTS 必备项数（自检基准）

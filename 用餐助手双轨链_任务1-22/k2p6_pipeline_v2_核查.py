@@ -26,8 +26,9 @@ from typing import List, Dict, Tuple, Optional, Callable
 # ====== [任务49] 任务类型参数路由表（文件顶部显式常量） ======
 # 依据：DeepSeek-V4 官方三档（Non-think / Think High / Think Max），见 THINKING_TIER_MAP。
 # 取参规则：执行时按任务声明的 type 取参；type 缺失或未知 → 拒绝运行并报缺（不猜）。
-# research 档：本步指令仅指定"强制 web_search 先行的前置检查"，
-#   model/thinking/max_tokens 指令未指定 → 如实留空 None，执行到 research 时拒绝运行并报缺。
+# research 档：Walter 2026-10-14 定稿四值（逐字）——model=deepseek-v4-flash、
+#   thinking=enabled、reasoning_effort=High、max_tokens=30000；档内 thinking 键沿用
+#   本表官方三档枚举 think_high（映射输出 enabled + high，不新增第四档）。
 TASK_PARAM_MAP = {
     "code_gen": {
         "model": "deepseek-v4-flash",
@@ -38,10 +39,10 @@ TASK_PARAM_MAP = {
         "note": "按文件拆分派发：调用方逐文件喂入，单文件上下文+产出须给 max_tokens 留余量（截断正解=余量>预估，而非关思考）",
     },
     "research": {
-        "model": None,                  # 指令未指定 → 报缺拒绝运行（不猜）
-        "thinking": None,               # 同上
-        "max_tokens": None,             # 同上
-        "temperature": None,
+        "model": "deepseek-v4-flash",   # Walter 2026-10-14 定稿逐字
+        "thinking": "think_high",       # Walter 定稿 thinking=enabled + reasoning_effort=High → 本表枚举 think_high
+        "max_tokens": 30000,            # Walter 定稿逐字
+        "temperature": None,            # thinking 模式 temperature 无效，省略
         "requires_web_search": True,    # 强制 web_search 先行的前置检查
         "note": "执行前置检查顺序：type校验 → web_search先行（未注入通道即拒绝）→ 参数完备性（None即拒绝）",
     },

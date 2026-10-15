@@ -19,6 +19,7 @@
 //             cardToMode(111)=recommend_deep / 未知卡throw点名 / 缺CARD_WIKI绑定拒绝点名
 //           ⑦任务56健康免责声明：非医疗chat→false / 含"过敏"→true / 推荐链→恒true /
 //             声明文本不拼正文 / enabled=false→恒false
+//           ⑧任务57 initDb补集合：正常建3集合+prompt_assets安全规则 / 已存在rerun不报错不重建
 //   - 结束打印 "n/m PASS"。
 
 'use strict'
@@ -959,6 +960,78 @@ checkAsync('⑦e enabled=false → 恒false（开关关闭，chat含关键词也
   const retRec = await g2.mod.main({ mode: 'recommend_fast', messages: [{ role: 'user', content: '推荐' }] })
   assert.strictEqual(retRec.health_notice, false,
     'enabled=false 时 recommend 也应 false，实得：' + retRec.health_notice)
+})
+
+// ===========================================================================
+// ⑧ 任务57 initDb 补建 prompt_assets：幂等创建 + 安全规则导出
+// ===========================================================================
+console.log('\n— ⑧ 任务57 initDb补集合 —')
+
+// initDb 全库唯一：任务37树（任务52配置外置未含此云函数，无canonical冲突）；跨树加载走替身
+const INITDB_PATH = path.resolve(ROOT, '..', '任务37_推荐后端', 'cloudfunctions', 'initDb', 'index.js')
+
+// 加载器：同步前缀内完成 stub 挂→require→还原（await 只留给 main() 调用）
+// createBehavior: 'ok' → createCollection 成功；'exists' → 全部抛 already-exist（模拟重复执行）
+function loadInitDb(createBehavior) {
+  const prevLoad = Module._load
+  const calls = []
+  Module._load = function (request, parent, isMain) {
+    if (request === 'wx-server-sdk') {
+      return {
+        init() {},
+        DYNAMIC_CURRENT_ENV: 'DYNAMIC_CURRENT_ENV',
+        getWXContext() { return { ENV: 'stub-env' } },
+        database() {
+          return {
+            createCollection(name) {
+              calls.push(name)
+              if (createBehavior === 'exists') {
+                return Promise.reject(new Error('[ResourceUnavailable] collection ' + name + ' already exists'))
+              }
+              return Promise.resolve({})
+            }
+          }
+        }
+      }
+    }
+    return prevLoad.apply(this, arguments)
+  }
+  let mod, loadErr = null
+  try {
+    delete require.cache[require.resolve(INITDB_PATH)]
+    mod = require(INITDB_PATH)
+  } catch (e) { loadErr = e } finally {
+    Module._load = prevLoad
+  }
+  return { mod, loadErr, calls }
+}
+
+// ⑧-a 正常创建：三集合全建，prompt_assets 安全规则 read:true/write:false 随返回带出
+checkAsync('⑧a initDb正常跑 → 3集合齐+prompt_assets安全规则read:true/write:false', async () => {
+  const g = loadInitDb('ok')
+  assert.strictEqual(g.loadErr, null, 'initDb 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main()
+  assert.deepStrictEqual(g.calls, ['ref_tables', 'dish_summary', 'prompt_assets'],
+    'createCollection 应按序调用三集合，实得：' + JSON.stringify(g.calls))
+  const pa = (ret.collections || []).find(c => c.name === 'prompt_assets')
+  assert.ok(pa, '返回应含 prompt_assets 集合结果')
+  assert.strictEqual(pa.created, true, '首次执行 prompt_assets 应 created=true')
+  assert.deepStrictEqual(ret.securityRules && ret.securityRules.prompt_assets, { read: true, write: false },
+    'prompt_assets 安全规则应 read:true/write:false')
+  const idx = (ret.indexes || []).find(i => i.name === 'idx_id_active_version')
+  assert.ok(idx, '索引清单应含 prompt_assets 的 idx_id_active_version')
+})
+
+// ⑧-b 幂等负向（任务书必备）：集合已存在（重复执行）→ 不报错不重建，created:false 跳过
+checkAsync('⑧b 集合已存在再跑 → 不报错不重建（created:false跳过）', async () => {
+  const g = loadInitDb('exists')
+  assert.strictEqual(g.loadErr, null, 'initDb 加载不应报错：' + (g.loadErr && g.loadErr.message))
+  const ret = await g.mod.main()  // 不 throw 即幂等成立
+  assert.strictEqual(ret.collections.length, 3, '仍应返回三集合结果')
+  const pa = ret.collections.find(c => c.name === 'prompt_assets')
+  assert.ok(pa, '返回应含 prompt_assets 集合结果')
+  assert.strictEqual(pa.created, false, '已存在应 created=false（不重建）')
+  assert.ok(/已存在/.test(String(pa.note || '')), 'note 应注明已存在跳过：' + pa.note)
 })
 
 // ── 收尾 ─────────────────────────────────────────────────────────

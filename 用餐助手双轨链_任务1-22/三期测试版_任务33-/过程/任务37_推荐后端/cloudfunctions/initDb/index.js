@@ -1,8 +1,9 @@
-// 【新增】DB 建表脚本：ref_tables + dish_summary
+// 【新增】DB 建表脚本：ref_tables + dish_summary + prompt_assets
 // 依据：推荐系统结构设计v1.0 §L1/L3；文档2/3 支持度标注规则；文档4 初始化prompt081
+// 【任务57】补建 prompt_assets：430报错根因——该集合原为手动建，换环境即缺（LD-20261013-006）
 //
 // 职责：
-//   1) 创建集合 ref_tables、dish_summary（已存在则幂等跳过）
+//   1) 创建集合 ref_tables、dish_summary、prompt_assets（已存在则幂等跳过）
 //   2) 输出集合索引定义（供控制台建索引；wx-server-sdk 无建索引 API）
 //   3) 输出安全规则 JSON（全员只读 / 仅云函数写）
 //
@@ -48,14 +49,32 @@ const COLLECTIONS = [
       { name: 'idx_dishId', keys: [['dishId', 1]], unique: true },
       { name: 'idx_name',   keys: [['name', 1]] }
     ]
+  },
+  {
+    name: 'prompt_assets',
+    desc: 'prompt 资产存储（卡id→正文）。装配器 loadPrompt 按 id+active 取当前生效版本；importRefTables 写入。',
+    fields: {
+      id:         'string  — 卡id（清单 PROMPT_BINDINGS 角色绑定值，如 AGT-0924-w8n-112）',
+      version:    'string  — 版本号（frontmatter version 或文件名后缀）',
+      title:      'string  — 卡标题',
+      content:    'string  — prompt 正文（md 原文）',
+      active:     'boolean — 生效标记（同 id 仅一条 active=true）',
+      sourceFile: 'string  — 来源文件（云存储 fileID）',
+      importedAt: 'number  — 导入时间戳'
+    },
+    indexes: [
+      // 对齐 recommend.js loadPrompt 查询：where({id, active:true}).orderBy('version','desc').limit(1)
+      { name: 'idx_id_active_version', keys: [['id', 1], ['active', 1], ['version', -1]] }
+    ]
   }
 ]
 
 // ── 安全规则：全员只读、仅云函数写（管理端/admin 不受客户端规则约束）──
 // 客户端读 = true，客户端写 = false → 写操作只能经云函数（admin）完成。
 const SECURITY_RULES = {
-  ref_tables:   { read: true, write: false },
-  dish_summary: { read: true, write: false }
+  ref_tables:    { read: true, write: false },
+  dish_summary:  { read: true, write: false },
+  prompt_assets: { read: true, write: false }
 }
 
 /** 幂等创建集合 */

@@ -20,7 +20,7 @@
 //   ③ 卡选择逻辑（任务55卡112卡面：推荐→默认108，显式"快速"→109；百科任务→111） → §3 selectCard / cardToMode
 //   ④ 无支持项查证二次独立调用编排   → §4 verifyUnsupportedItems
 //   ⑤ 规则层硬过滤双保险             → §5 ruleLayerFilter / reconcileFilters
-//   ⑥ 识图前置链（含图先识图，096）  → §6 recognizeImages / beginRecognizing
+//   ⑥ 识图前置链（含图先识图，110）  → §6 recognizeImages / beginRecognizing
 // ---------------------------------------------------------------------------
 
 'use strict'
@@ -57,7 +57,7 @@ const CARD_FAST   = requirePromptRole('CARD_FAST')       // 快速卡（仅显�
 const PROMPT_RECOGNIZE = requirePromptRole('PROMPT_RECOGNIZE') // 识图任务卡（图像前置，任务55新链=110）
 const CARD_WIKI   = requirePromptRole('CARD_WIKI')       // 百科任务卡（记录/为什么搭，无快速模式，任务55新链=111）
 
-// 初始化块"将查的表"缺省集合（来自 099）
+// 初始化块"将查的表"缺省集合（来自 112 初始化prompt）
 const DEFAULT_TABLES   = ['016', '020', '033', '051', '062']
 // 支持度标注/查证（步骤4.5/4.6）所需表
 const SUPPORT_TABLES   = ['058', '068']
@@ -346,7 +346,7 @@ function buildUserBlock({ userInput, recognitionRecord = null }) {
 
 /**
  * 装配器主函数：按序拼装
- *  初始化prompt(099) + 当次卡(097/098) + 速查表相关节选 + 候选清单 + 用户输入原文(+识图记录)
+ *  初始化prompt(112) + 当次卡(108/109) + 速查表相关节选 + 候选清单 + 用户输入原文(+识图记录)
  */
 async function assemblePrompt({ session, userInput, db, needMechanism = false, recognitionRecord = null } = {}) {
   // 1) 初始化 prompt（按版本号从 DB 读）
@@ -413,7 +413,7 @@ async function verifyUnsupportedItems({ gateway, mode, unsupportedItems = [], ta
  *  - 过敏原命中 → 剔除
  *  - 忌口/素食命中 → 剔除
  *  - 重选（已选过）→ 剔除
- *  - 成分信息不足 → 按含有处理，移出（初始化prompt099 忌口前置过滤口径）
+ *  - 成分信息不足 → 按含有处理，移出（初始化prompt112 忌口前置过滤口径）
  */
 function ruleLayerFilter(candidates = [], hardFilters = {}) {
   const { allergens = [], diet = [], excluded = [] } = hardFilters
@@ -451,7 +451,7 @@ function reconcileFilters(ruleLayerKept = [], agentLayerKept = []) {
 }
 
 // ===========================================================================
-// §6 识图前置链（含图输入：先走 096 识图卡，产出【识图记录】作为唯一图像来源）
+// §6 识图前置链（含图输入：先走 110 识图任务卡，产出【识图记录】作为唯一图像来源）
 // ===========================================================================
 
 /** 从 userInput 提取图片（image 字段 / 非空 images 数组） */
@@ -501,9 +501,9 @@ function countRecordEntries(text) {
 /**
  * 识图前置链：调用 recognize 功能位（aiGateway 既有 recognize 位；模型ID以网关 MODEL_MAP 为准，
  * 本层不改网关）。
- *  - system prompt = 096 卡全文 + 099 初始化块要求
+ *  - system prompt = 110 识图任务卡全文 + 112 初始化块要求
  *  - user content   = 用户图片（原样透传）
- *  - 失败/异常 → 标记"识图失败"，按信息不足处理（依 096 铁律）
+ *  - 失败/异常 → 标记"识图失败"，按信息不足处理（依 110 识图任务卡铁律）
  *  - 结果写入 session.recognition，供推荐调用注入
  */
 async function recognizeImages({ session, userInput, gateway, db } = {}) {
@@ -511,7 +511,7 @@ async function recognizeImages({ session, userInput, gateway, db } = {}) {
   const images = extractImages(userInput)
 
   let record
-  // 从 DB 读 096 识图卡正文
+  // 从 DB 读 110 识图任务卡正文
   let recognizePrompt = ''
   try {
     recognizePrompt = await loadPrompt(db, PROMPT_RECOGNIZE.id)
@@ -527,7 +527,7 @@ async function recognizeImages({ session, userInput, gateway, db } = {}) {
     const recognizeMessages = [
       { role: 'system', content: recognizePrompt + '\n\n---\n\n初始化块要求：输出须含【识图记录】标记，含图N主题、分区转录清单、符号计数、置信标注与遗漏声明。' },
       { role: 'user', content: [
-        { type: 'text', text: '请识别以下图片，按096卡输出【识图记录】' },
+        { type: 'text', text: '请识别以下图片，按识图任务执行卡输出【识图记录】' },
         ...images.map((img) => ({ type: 'image_url', image_url: { url: img } }))
       ] }
     ]
@@ -561,7 +561,7 @@ async function recommend({ session, userInput, gateway, db, needMechanism = fals
   // —— 双保险第一层：候选进装配前先规则层硬过滤（loadCandidates 已做，二次兜底）——
   session.candidates = ruleLayerFilter(session.candidates, session.hardFilters)
 
-  // —— 识图前置链：含图输入先执行 096 识图卡 ——
+  // —— 识图前置链：含图输入先执行 110 识图任务卡 ——
   let recognitionRecord = null
   if (hasImages(userInput)) {
     beginRecognizing(session)

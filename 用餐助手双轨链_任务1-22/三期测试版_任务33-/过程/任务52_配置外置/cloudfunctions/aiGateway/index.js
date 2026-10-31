@@ -14,6 +14,7 @@ const assetsConfig = require('./assets.config.js')
 const MODEL_MAP = assetsConfig.MODEL_MAP
 const DEFAULT_CHANNEL = assetsConfig.DEFAULT_CHANNEL
 const PERSONA = assetsConfig.PERSONA
+const IMAGE_MAX_BYTES = assetsConfig.IMAGE_MAX_BYTES
 
 // 清单自检：不通过则拒绝执行（错误信息列出全部缺项，绝不猜默认值）
 const _cfgCheck = assetsConfig.checkConfig()
@@ -47,10 +48,76 @@ function normalizeDeepseekModel(model) {
   return model
 }
 
+// ── cloud:// 图址转换（任务61识图链贯通，2026-11-01）────────────────
+// 背景：CloudBase 多模态 image_url 仅接受公网 http(s) 直链或 base64 DataURL，
+//       cloud:// 不在合法形态内（docs.cloudbase.net/ai/model/multimodal，2026-11-01 检索；
+//       非 DataURL 会被判 invalid image_url）。
+// 做法：image_url 块 url 以 cloud:// 开头者 → cloud.downloadFile 取 Buffer（fileContent）→
+//       大小闸（清单 IMAGE_MAX_BYTES，依据官方 base64 单张建议 ≤5MB）→ 按扩展名定 mime →
+//       替换为 data URL 后再发 generateText。http(s)/data:image 原样放行；其余形态显式报错。
+const IMAGE_MIME_BY_EXT = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp', '.gif': 'image/gif'
+}
+
+function guessImageMime(fileID) {
+  const lower = String(fileID).toLowerCase()
+  for (const ext of Object.keys(IMAGE_MIME_BY_EXT)) {
+    if (lower.endsWith(ext)) return IMAGE_MIME_BY_EXT[ext]
+  }
+  // R6 兜底必须带显式告警：未识别扩展名按 jpeg 内联，云函数日志可见降级
+  console.warn('[任务61] 未识别扩展名按 image/jpeg 内联：' + fileID)
+  return 'image/jpeg'
+}
+
+async function resolveCloudImageUrl(fileID) {
+  let res
+  try {
+    res = await cloud.downloadFile({ fileID })
+  } catch (e) {
+    throw new Error(`cloud.downloadFile 失败：fileID=${fileID}；errMsg=${e && e.message ? e.message : String(e)}`)
+  }
+  const buf = res && res.fileContent
+  if (!Buffer.isBuffer(buf)) {
+    throw new Error(`cloud.downloadFile 返回结构异常：缺 fileContent(Buffer)，fileID=${fileID}；实际类型=${typeof buf}`)
+  }
+  if (buf.length > IMAGE_MAX_BYTES) {
+    throw new Error(`图片超大小闸：fileID=${fileID}；实际 ${buf.length} 字节，上限 ${IMAGE_MAX_BYTES} 字节`)
+  }
+  return `data:${guessImageMime(fileID)};base64,${buf.toString('base64')}`
+}
+
+// 扫描 messages 内数组型 content 的 image_url 块；cloud:// 就地替换为 data URL（替换块为新对象，不动其它字段）
+async function resolveCloudImages(messages) {
+  if (!Array.isArray(messages)) return messages
+  for (const msg of messages) {
+    const content = msg && msg.content
+    if (!Array.isArray(content)) continue
+    for (let i = 0; i < content.length; i++) {
+      const block = content[i]
+      if (!block || block.type !== 'image_url' || typeof block.image_url !== 'object') continue
+      const url = block.image_url.url
+      if (typeof url !== 'string' || url === '') {
+        throw new Error(`image_url 块缺 url 字符串：消息 content 第 ${i} 块；实际类型=${typeof url}（R5 显式报缺）`)
+      }
+      if (url.indexOf('cloud://') === 0) {
+        const dataUrl = await resolveCloudImageUrl(url)
+        content[i] = Object.assign({}, block, { image_url: { url: dataUrl } })
+      } else if (/^(https?:\/\/|data:image\/)/.test(url)) {
+        // CloudBase 多模态合法形态（公网直链 / base64 DataURL）：放行不动
+      } else {
+        throw new Error(`image_url 形态不受理（仅 cloud://、http(s)、data:image）：${url.slice(0, 80)}`)
+      }
+    }
+  }
+  return messages
+}
+
 async function callExtend(cfg, messages) {
   const modelId = normalizeDeepseekModel(cfg.model)
   const client = ai.createModel('cloudbase')
-  const data = { model: modelId, messages }
+  // [任务61] 注入前转换：cloud:// 图址转 base64 DataURL；转换异常显式上抛（错误信息含定位要素）
+  const data = { model: modelId, messages: await resolveCloudImages(messages) }
   // 【任务40，2026-09-29】cloudbase通道不支持thinking参数，思考档位仅selfhost通道生效。
   // 以下两行原 thinking 注入已注释：往 generateText 的 data 里塞 thinking 字段
   // 会被 CloudBase 模型接口拒绝（云端实测 mode=chat 返回 400；429 阶段已验证

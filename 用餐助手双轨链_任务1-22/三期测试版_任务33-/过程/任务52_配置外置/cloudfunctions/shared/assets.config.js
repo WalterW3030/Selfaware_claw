@@ -126,6 +126,13 @@ const HEALTH_NOTICE = {
   ]
 }
 
+
+// ── ⑧ IMAGE_MAX_BYTES 图像大小闸（任务61识图链贯通，2026-11-01）────────────────
+// 依据：CloudBase 多模态 base64 单张官方建议 ≤ 5MB（docs.cloudbase.net/ai/model/multimodal，2026-11-01 检索）。
+// 消费方：aiGateway 的 cloud://→base64 转换（downloadFile 之后、注入 generateText 之前闸）。
+// 性质：官方"建议"值非协议硬上限；此处取建议值作闸，超限显式报错，不内联不静默。
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
 // ── 清单自检函数 ─────────────────────────────────────────────────
 // 校验 MODEL_MAP 六位齐全 / EXPECTED_TABLES 九项（含 nameSeg）/ EXPECTED_PROMPTS 五项（含 nameSeg）。
 // 通过 → { ok: true, missing: [] }
@@ -207,6 +214,12 @@ function checkConfig() {
     }
   }
 
+
+  // ⑧ IMAGE_MAX_BYTES 段（任务61）：正数数值（大小闸取值不合法则显式报缺，不猜默认）
+  if (!(Number.isFinite(IMAGE_MAX_BYTES) && IMAGE_MAX_BYTES > 0)) {
+    missing.push('IMAGE_MAX_BYTES（图像大小闸，必须是正数数值）')
+  }
+
   return { ok: missing.length === 0, missing }
 }
 
@@ -226,5 +239,6 @@ module.exports = {
   ENV_ID,
   PERSONA,
   HEALTH_NOTICE,
+  IMAGE_MAX_BYTES,
   checkConfig
 }

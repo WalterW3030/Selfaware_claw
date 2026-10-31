@@ -1,0 +1,28 @@
+<view class="page">
+  <text class="page-title">{{pageTitle}}</text>
+
+  <!-- [任务61] 识图链贯通：识别中态 + 识图记录展示 -->
+  <view class="recognize-status" wx:if="{{recognizing}}">
+    <text>识别中…</text>
+  </view>
+  <view class="recognize-result" wx:if="{{!recognizing && (recognizeText || recognizeFailed)}}">
+    <text class="recognize-text">{{recognizeText}}</text>
+  </view>
+
+  <!-- 结构化结果:识别候选 + 置信度角标 -->
+  <view class="candidate">
+    <text class="dish-name">识别候选</text>
+    <text class="confidence-tag">置信度角标</text>
+  </view>
+
+  <!-- 确认门禁:未经确认不入库(v3 2.1 / AGENTS 业务红线) -->
+  <view class="actions">
+    <button bindtap="goConfirm">确认</button>
+    <button>纠正</button>
+  </view>
+
+  <!-- 【任务56】健康免责声明:独立于对话回复,仅 health_notice=true 时显示,不折叠 -->
+  <view class="health-notice" wx:if="{{healthNotice}}">
+    <text class="health-notice-text">{{healthNoticeText}}</text>
+  </view>
+</view>

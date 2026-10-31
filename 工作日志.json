@@ -65,7 +65,7 @@
   "重复发送登记2_1031": "8ec5491落库宣告又误发两遍（同一缺陷复犯）。按错误复犯即修复无效规则：先前'登记备查'不构成修复。修复动作：此后落库宣告在工具调用层面只允许单次send_message，写完立即停手",
   "任务61方案批准_1101": "ds_kimi任务61方案报批已批准：取证四条+官方检索留痕（downloadFile官方文档/多模态格式合法形态/客户端100K实证）+最小改造四处触点（handleCapture捕获fileID→result页带参→recommend.js零改动→aiGateway加cloud://转base64转换器+5MB闸入清单）。批准时纠正一处：result页现行版在Good2Eat仓库miniprogram/pages/result/，禁止按契约盲写，须拉现行版开diff",
   "任务61阻塞解除_1101": "ds_kimi报阻塞：本机无Good2Eat克隆且PAT无权访问（前科96eeecc同因）。选方案A：把现行版六件（result.js/wxml/json+index.js+recommend.js+前端assets.config.js）快照进Selfaware_claw任务61目录，7235fe7已推。关键事实同步给它：现行result.js是占位逻辑无recognize调用，触点2=新增发起逻辑。批准触点4（aiGateway转换器）先行",
-  "识图链贯通交付_任务61_1101": "任务61四触点交付：①index.js handleCapture捕获fileID并带参跳转；②result.js新增识别发起(照order.js模式)+result.wxml展示块；③recommend.js零改动(三方diff实证)；④aiGateway新增cloud://→base64转换器(downloadFile结构探测+IMAGE_MAX_BYTES=5MB大小闸+形态白名单显式报错)，清单四副本同步新增⑧节。验证：node --check全过、四副本diff identical、转换器单测7/7、任务52负向回归34/34 PASS、wxml配平。未实测：云端downloadFile实调/图片模型位(属任务62)/端到端真机——交接步骤见过程/任务61_识图链贯通/运行证据_任务61.md。",
   "任务61重催_1101": "Walter令重催。ds_kimi overload后按恢复规则重发任务61开工指令（不计提醒）：快照路径7235fe7+触点4先行+方案要点+双附件要求",
-  "黑板体系上传登记_1101": "Walter经GitHub网页上传六件到Selfaware_claw根目录：router(8).md（路由头v17）/project_instruction(2).md/deployment_manifest(1).md/protocol_v12三版。文件名带下载重命名括号。已在群里问他用途，未获指令前不动。7410b52合并推送"
+  "黑板体系上传登记_1101": "Walter经GitHub网页上传六件到Selfaware_claw根目录：router(8).md（路由头v17）/project_instruction(2).md/deployment_manifest(1).md/protocol_v12三版。文件名带下载重命名括号。已在群里问他用途，未获指令前不动。7410b52合并推送",
+  "任务61验收通过与进度对账_1101": "我独立核验任务61代码（转换器结构探测/5MB闸/显式报错/白名单，单测7/7回归34/34，2ed755b+d0bb797在远端），验收通过，云端未实测待Walter部署。进度对账发Walter：完成1件，卡Walter处4件（Console报错/模型ID/UI拍板/黑板体系用途），可做事项四件带文件路径（改造后七件覆盖路径逐条列出）"
 }

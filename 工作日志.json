@@ -67,5 +67,6 @@
   "任务61阻塞解除_1101": "ds_kimi报阻塞：本机无Good2Eat克隆且PAT无权访问（前科96eeecc同因）。选方案A：把现行版六件（result.js/wxml/json+index.js+recommend.js+前端assets.config.js）快照进Selfaware_claw任务61目录，7235fe7已推。关键事实同步给它：现行result.js是占位逻辑无recognize调用，触点2=新增发起逻辑。批准触点4（aiGateway转换器）先行",
   "任务61重催_1101": "Walter令重催。ds_kimi overload后按恢复规则重发任务61开工指令（不计提醒）：快照路径7235fe7+触点4先行+方案要点+双附件要求",
   "黑板体系上传登记_1101": "Walter经GitHub网页上传六件到Selfaware_claw根目录：router(8).md（路由头v17）/project_instruction(2).md/deployment_manifest(1).md/protocol_v12三版。文件名带下载重命名括号。已在群里问他用途，未获指令前不动。7410b52合并推送",
-  "任务61验收通过与进度对账_1101": "我独立核验任务61代码（转换器结构探测/5MB闸/显式报错/白名单，单测7/7回归34/34，2ed755b+d0bb797在远端），验收通过，云端未实测待Walter部署。进度对账发Walter：完成1件，卡Walter处4件（Console报错/模型ID/UI拍板/黑板体系用途），可做事项四件带文件路径（改造后七件覆盖路径逐条列出）"
+  "任务61验收通过与进度对账_1101": "我独立核验任务61代码（转换器结构探测/5MB闸/显式报错/白名单，单测7/7回归34/34，2ed755b+d0bb797在远端），验收通过，云端未实测待Walter部署。进度对账发Walter：完成1件，卡Walter处4件（Console报错/模型ID/UI拍板/黑板体系用途），可做事项四件带文件路径（改造后七件覆盖路径逐条列出）",
+  "三问解答_1101": "①识图操作：面板永无图片按钮，两条路=模拟器拍照链（需先部署任务61七件）+面板fileID法（任务61新能力：存储recognize/传图复制fileID填JSON）②Console步骤详发：清空→发送→数新增行不搜索；确认'补充要求（可选）'是设计文案入口没错（order.wxml:104绑onSend）③IDE闪退：JS不致崩IDE=推断工具侧，取证点=是否固定按钮必现+换稳定版"
 }

@@ -1,0 +1,53 @@
+# 任务N4-F8 产出留痕（命令输出原文）
+
+## node --check（语法验收）
+$ node --check miniprogram/cloudfunctions/aiGateway/index.js
+exit=0（PASS）
+
+## 自测 18/18（Module._load 替身法，/tmp/n4_f8_selftest.js）
+PASS  1 food正例 type=food
+PASS  1b recognize health_notice=false
+PASS  1c 主调用+分类调用都发生
+PASS  1d 分类与主调用同模型(deepseek-flash归一化后)
+PASS  2 menu正例 type=menu
+PASS  3 显式null type=null
+PASS  4 非JSON→null
+PASS  4b 主链文本不受影响
+PASS  5 非法枚举→null
+PASS  6 分类抛错→null
+PASS  6b 主链不阻断
+PASS  6c 失败有warn留痕
+PASS  7 无图不调分类
+PASS  7b 无图type=null
+PASS  8 散文内JSON可解析
+PASS  9 recommend health_notice恒true
+PASS  9b 非recognize不挂type
+PASS  9c 非recognize不调分类
+通过 18 / 18
+
+## 标记机检
+$ grep -c "任务N4-F8" miniprogram/cloudfunctions/aiGateway/index.js
+4
+
+## recommend 链版本字段检查（任务书附带检查项，非施工项）
+$ git grep -c "recommend_request_v1\|recommend_response_v1" HEAD -- miniprogram/**
+0 命中（exit=1）
+结论：recommend 请求/响应链全库无版本字段。现行契约 = gateway.invoke({mode,messages}) / 原始AI响应+health_notice。是否引入版本字段待 Coordinator/Walter 另行裁决。
+
+## commit 与推送
+$ git log --oneline -1
+0b7f13e [任务N4-F8] aiGateway recognize响应补type字段(food/menu/null)
+
+$ git push -u origin n4-f8-recognize-type
+[new branch] n4-f8-recognize-type -> n4-f8-recognize-type（成功）
+
+## diff stat（基 cd011f17 → 0b7f13e）
+1 file changed, 73 insertions(+)
+miniprogram/cloudfunctions/aiGateway/index.js
+
+## 云函数存在性全量查（坐实 Kimi 更正）
+$ git ls-tree -r --name-only HEAD | grep aiGateway
+miniprogram/cloudfunctions/aiGateway/assets.config.js
+miniprogram/cloudfunctions/aiGateway/config.json
+miniprogram/cloudfunctions/aiGateway/index.js
+miniprogram/cloudfunctions/aiGateway/package.json
